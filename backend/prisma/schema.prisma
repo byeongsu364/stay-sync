@@ -1,0 +1,191 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model TravelSession {
+
+  // ==========================================================
+  // Primary Key
+  // ==========================================================
+
+  id                    Int      @id @default(autoincrement())
+
+  /// 사용자 세션 ID
+  sessionId             String   @unique
+
+  // ==========================================================
+  // Conversation State
+  // ==========================================================
+
+  /// 현재 진행 단계
+  currentStep           String
+
+  /// Route 번호
+  routeNumber           Int      @default(1)
+
+  /// 마지막 질문한 Fact
+  lastQuestionField     String?
+
+  /// 수정 대상
+  correctionTarget      String?
+
+  /// 초기화 대상 Fact
+  rollbackFields        String?
+
+  // ==========================================================
+  // User Information
+  // ==========================================================
+
+  /**
+   * 사용자 언어
+   * ko
+   * en
+   * ja
+   * zh
+   */
+  language              String   @default("ko")
+
+  // ==========================================================
+  // Travel Facts
+  // ==========================================================
+
+  /// 여행 지역
+  region                String?
+
+  /// 여행 기간 (예: 2박3일)
+  period                String?
+
+  /// 출발일
+  startDate             DateTime?
+
+  /// 종료일
+  endDate               DateTime?
+
+  /**
+   * 숙박
+   * 당일치기
+   */
+  tripType              String?
+
+  // ==========================================================
+  // Accommodation
+  // ==========================================================
+
+  accommodationName     String?
+
+  accommodationAddress  String?
+
+  accommodationMapx     Float?
+
+  accommodationMapy     Float?
+
+  // ==========================================================
+  // Departure Location (당일치기)
+  // ==========================================================
+
+  departureName         String?
+
+  departureAddress      String?
+
+  departureMapx         Float?
+
+  departureMapy         Float?
+
+  // ==========================================================
+  // Companion
+  // ==========================================================
+
+  peopleCount           Int?
+
+  companionType         String?
+
+  // ==========================================================
+  // Ontology Mapping Result
+  // ==========================================================
+
+  /**
+   * 예)
+   * ["자연","힐링","카페"]
+   */
+  themes                Json?
+
+  // ==========================================================
+  // Recommendation
+  // ==========================================================
+
+  /**
+   * 사용자가 선택한 관광지
+   */
+  selectedPlaces        Json?
+
+  /**
+   * 추가 추천 관광지
+   */
+  relatedPlaces         Json?
+
+  /**
+   * 추천 반복 횟수
+   */
+  recommendationRound   Int      @default(1)
+
+  // ==========================================================
+  // Route Planning
+  // ==========================================================
+
+  /**
+   * 최종 선택 관광지
+   */
+  finalSelectedPlaces   Json?
+
+  /**
+   * 최종 동선
+   *
+   * 출발지(숙소 또는 당일치기 출발지)
+   * →
+   * 관광지...
+   * →
+   * 출발지 복귀
+   */
+  finalRoute            Json?
+
+  // ==========================================================
+  // Kakao Map
+  // ==========================================================
+
+  /**
+   * 카카오맵 저장 여부
+   */
+  kakaoMapSaved         Boolean  @default(false)
+
+  // ==========================================================
+  // Session Status
+  // ==========================================================
+
+  /**
+   * 여행 추천 완료 여부
+   */
+  isCompleted           Boolean  @default(false)
+
+  // ==========================================================
+  // Future Extension
+  // ==========================================================
+
+  /**
+   * 확장용 JSON
+   * (향후 새로운 Fact나 옵션 저장)
+   */
+  facts                 Json?
+
+  // ==========================================================
+  // Timestamp
+  // ==========================================================
+
+  createdAt             DateTime @default(now())
+
+  updatedAt             DateTime @updatedAt
+}

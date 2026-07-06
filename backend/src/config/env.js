@@ -1,42 +1,29 @@
 require("dotenv").config();
 
-/**
- * ==========================================================
- * Environment Variables
- *
- * TODO (배포 시 변경)
- * ----------------------------------------------------------
- * 현재:
- *   Local Ollama 사용
- *
- * 추후:
- *   연구실/운영 서버의 LLM API로 변경
- *
- * 변경 대상
- *   OLLAMA_URL
- *   OLLAMA_MODEL
- * ==========================================================
- */
-
 module.exports = {
-    // Server
-    PORT: process.env.PORT || 4000,
+    port: process.env.PORT,
 
-    // LLM
-    OLLAMA_URL: process.env.OLLAMA_URL,
-    OLLAMA_MODEL: process.env.OLLAMA_MODEL,
+    llm: {
+        host: process.env.OLLAMA_HOST,
+        port: process.env.OLLAMA_PORT,
+        model: process.env.OLLAMA_MODEL,
+    },
 
-    // Weather API
-    KMA_SERVICE_KEY: process.env.KMA_SERVICE_KEY,
+    weather: {
+        serviceKey: process.env.KMA_SERVICE_KEY,
+    },
 
-    // Air Quality API
-    WAQI_TOKEN: process.env.WAQI_TOKEN,
+    airQuality: {
+        token: process.env.WAQI_TOKEN,
+    },
 
-    // Database (추후 결정)
-    DB_TYPE: process.env.DB_TYPE,
-    DB_HOST: process.env.DB_HOST,
-    DB_PORT: process.env.DB_PORT,
-    DB_NAME: process.env.DB_NAME,
-    DB_USER: process.env.DB_USER,
-    DB_PASSWORD: process.env.DB_PASSWORD,
+    db: {
+        type: process.env.DB_TYPE,
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+        url: process.env.DATABASE_URL,
+    },
 };
