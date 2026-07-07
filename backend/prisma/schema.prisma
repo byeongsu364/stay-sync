@@ -189,3 +189,50 @@ model TravelSession {
 
   updatedAt             DateTime @updatedAt
 }
+
+model WeatherForecast {
+
+  // ==========================================================
+  // Primary Key
+  // ==========================================================
+
+  id        Int      @id @default(autoincrement())
+
+  // ==========================================================
+  // Forecast Information
+  // ==========================================================
+
+  /// 예보 날짜
+  date      DateTime
+
+  /// 지역명
+  region    String
+
+  /// 최저기온
+  minTemp   Float?
+
+  /// 최고기온
+  maxTemp   Float?
+
+  /// 평균기온
+  avgTemp   Float?
+
+  /// 강수확률
+  rainProb  Float?
+
+  /**
+   * short : 단기예보
+   * mid   : 중기예보
+   */
+  source    String
+
+  // ==========================================================
+  // Timestamp
+  // ==========================================================
+
+  createdAt DateTime @default(now())
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, region], name: "date_region")
+}

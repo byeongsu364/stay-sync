@@ -1,29 +1,34 @@
-const app = require("./src/config/app");
-const env = require("./src/config/env");
+const express = require("express");
+const cors = require("cors");
 
-/**
- * ===========================================================
- * TODO (DB 결정 후)
- *
- * MongoDB라면 mongoose 연결
- *
- * PostgreSQL이라면 Prisma 또는 Sequelize 연결
- *
- * ===========================================================
- */
+const env = require("./src/config/env");
+const { connectDB } = require("./src/config/db");
+const chatRoutes = require("./src/routes/chatRoutes");
+const { startWeatherScheduler } = require("./src/jobs/weatherScheduler");
+
+const app = express();
+
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.get("/", (req, res) => {
-
     res.json({
-
-        message: "STAY-SYNC Backend Server"
-
+        success: true,
+        message: "Stay Sync Backend API is running",
     });
-
 });
 
-app.listen(env.PORT, () => {
+app.use("/api/chat", chatRoutes);
 
-    console.log(`Server Running : ${env.PORT}`);
+async function startServer() {
+    await connectDB();
 
-});
+    startWeatherScheduler();
+
+    app.listen(env.PORT, () => {
+        console.log(`Server Running : ${env.PORT}`);
+    });
+}
+
+startServer();
