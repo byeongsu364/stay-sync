@@ -37,9 +37,6 @@ const axios = require("axios");
 
 /**
  * 위치 검색
- *
- * @param {string} keyword
- * @returns {Promise<Object|null>}
  */
 async function searchLocation(keyword) {
     if (!keyword || keyword.trim() === "") {
@@ -47,18 +44,8 @@ async function searchLocation(keyword) {
     }
 
     try {
-        /**
-         * ======================================================
-         * TODO
-         * 현재 Mock
-         *
-         * 추후 Kakao Local Search API 호출
-         *
-         * axios.get(...)
-         *
-         * 로 변경
-         * ======================================================
-         */
+        // TODO
+        // Kakao Local API 연동 예정
 
         return {
             name: keyword.trim(),
@@ -88,9 +75,6 @@ async function getDepartureLocation(locationName) {
 
 /**
  * 위치 존재 여부 확인
- *
- * @param {string} keyword
- * @returns {Promise<boolean>}
  */
 async function validateLocation(keyword) {
     const result = await searchLocation(keyword);
@@ -98,9 +82,7 @@ async function validateLocation(keyword) {
 }
 
 /**
- * 위치 조회 후 예외 처리
- *
- * Controller에서 바로 사용하기 위한 함수
+ * Controller에서 사용할 위치 조회
  */
 async function resolveLocation(keyword) {
     const location = await searchLocation(keyword);
@@ -120,10 +102,40 @@ async function resolveLocation(keyword) {
     };
 }
 
+/**
+ * ==========================================================
+ * Chat Service에서 사용하는 위치 입력 처리
+ * ==========================================================
+ *
+ * 현재는 실제 위치 입력 단계가 없으므로
+ * 항상 handled=false 반환
+ *
+ * 추후
+ * - 숙소 입력
+ * - 출발지 입력
+ * 단계에서 Kakao Local API를 호출하도록 확장 예정
+ * ==========================================================
+ */
+async function handleLocationInput({
+    userMessage,
+    facts,
+    currentStep,
+}) {
+    return {
+        handled: false,
+        facts,
+        current_step: currentStep,
+        route_number: null,
+        last_question_field: null,
+        reply: null,
+    };
+}
+
 module.exports = {
     searchLocation,
     getAccommodationLocation,
     getDepartureLocation,
     validateLocation,
     resolveLocation,
+    handleLocationInput,
 };

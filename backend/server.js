@@ -26,8 +26,8 @@ async function startServer() {
 
     startWeatherScheduler();
 
-    app.listen(env.PORT, () => {
-        console.log(`Server Running : ${env.PORT}`);
+    app.listen(env.port, () => {
+        console.log(`Server Running : ${env.port}`);
     });
 }
 
