@@ -60,14 +60,6 @@ module.exports = {
         "학교"
     ],
 
-    people_count: [
-        "인원",
-        "인원수",
-        "몇명",
-        "몇 명",
-        "사람"
-    ],
-
     companion_type: [
         "혼자",
         "친구",

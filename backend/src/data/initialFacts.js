@@ -28,8 +28,6 @@ const initialFacts = {
         mapy: null,
     },
 
-    people_count: null,
-
     companion_type: null,
 
     themes: [],

@@ -78,15 +78,8 @@ const correctionPrompt = `
 
 -------------------------
 
-5. people_count
 
-예)
-
-"총 몇 명이 여행하시나요?"
-
--------------------------
-
-6. companion_type
+5. companion_type
 
 예)
 

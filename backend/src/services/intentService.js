@@ -45,11 +45,6 @@ ${userMessage}
 
     const result = await callLLMJson(intentPrompt, userPrompt);
 
-    const llmResult = await callLLMJson(travelIntentPrompt, userPrompt);
-
-    console.log("LLM RESULT");
-    console.dir(llmResult, { depth: null });
-
     const intent = result?.intent;
 
     if (!ALLOWED_INTENTS.includes(intent)) {

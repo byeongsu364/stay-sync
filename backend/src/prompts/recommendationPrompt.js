@@ -10,7 +10,6 @@ const recommendationPrompt = `
 - 사용자 여행 정보
 - 숙소 위치
 - 동행자 유형
-- 인원 수
 - 선호 테마
 - 날씨
 - 미세먼지
