@@ -8,34 +8,33 @@ datasource db {
 }
 
 model TravelSession {
-
   // ==========================================================
   // Primary Key
   // ==========================================================
 
-  id                    Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   /// 사용자 세션 ID
-  sessionId             String   @unique
+  sessionId String @unique
 
   // ==========================================================
   // Conversation State
   // ==========================================================
 
   /// 현재 진행 단계
-  currentStep           String
+  currentStep String
 
   /// Route 번호
-  routeNumber           Int      @default(1)
+  routeNumber Int @default(1)
 
   /// 마지막 질문한 Fact
-  lastQuestionField     String?
+  lastQuestionField String?
 
   /// 수정 대상
-  correctionTarget      String?
+  correctionTarget String?
 
   /// 초기화 대상 Fact
-  rollbackFields        String?
+  rollbackFields String?
 
   // ==========================================================
   // User Information
@@ -48,61 +47,61 @@ model TravelSession {
    * ja
    * zh
    */
-  language              String   @default("ko")
+  language String @default("ko")
 
   // ==========================================================
   // Travel Facts
   // ==========================================================
 
   /// 여행 지역
-  region                String?
+  region String?
 
   /// 여행 기간 (예: 2박3일)
-  period                String?
+  period String?
 
   /// 출발일
-  startDate             DateTime?
+  startDate DateTime?
 
   /// 종료일
-  endDate               DateTime?
+  endDate DateTime?
 
   /**
    * 숙박
    * 당일치기
    */
-  tripType              String?
+  tripType String?
 
   // ==========================================================
   // Accommodation
   // ==========================================================
 
-  accommodationName     String?
+  accommodationName String?
 
-  accommodationAddress  String?
+  accommodationAddress String?
 
-  accommodationMapx     Float?
+  accommodationMapx Float?
 
-  accommodationMapy     Float?
+  accommodationMapy Float?
 
   // ==========================================================
   // Departure Location (당일치기)
   // ==========================================================
 
-  departureName         String?
+  departureName String?
 
-  departureAddress      String?
+  departureAddress String?
 
-  departureMapx         Float?
+  departureMapx Float?
 
-  departureMapy         Float?
+  departureMapy Float?
 
   // ==========================================================
   // Companion
   // ==========================================================
 
-  peopleCount           Int?
+  peopleCount Int?
 
-  companionType         String?
+  companionType String?
 
   // ==========================================================
   // Ontology Mapping Result
@@ -112,7 +111,7 @@ model TravelSession {
    * 예)
    * ["자연","힐링","카페"]
    */
-  themes                Json?
+  themes Json?
 
   // ==========================================================
   // Recommendation
@@ -121,17 +120,17 @@ model TravelSession {
   /**
    * 사용자가 선택한 관광지
    */
-  selectedPlaces        Json?
+  selectedPlaces Json?
 
   /**
    * 추가 추천 관광지
    */
-  relatedPlaces         Json?
+  relatedPlaces Json?
 
   /**
    * 추천 반복 횟수
    */
-  recommendationRound   Int      @default(1)
+  recommendationRound Int @default(1)
 
   // ==========================================================
   // Route Planning
@@ -140,18 +139,17 @@ model TravelSession {
   /**
    * 최종 선택 관광지
    */
-  finalSelectedPlaces   Json?
+  finalSelectedPlaces Json?
 
   /**
    * 최종 동선
-   *
    * 출발지(숙소 또는 당일치기 출발지)
    * →
    * 관광지...
    * →
    * 출발지 복귀
    */
-  finalRoute            Json?
+  finalRoute Json?
 
   // ==========================================================
   // Kakao Map
@@ -160,7 +158,7 @@ model TravelSession {
   /**
    * 카카오맵 저장 여부
    */
-  kakaoMapSaved         Boolean  @default(false)
+  kakaoMapSaved Boolean @default(false)
 
   // ==========================================================
   // Session Status
@@ -169,7 +167,7 @@ model TravelSession {
   /**
    * 여행 추천 완료 여부
    */
-  isCompleted           Boolean  @default(false)
+  isCompleted Boolean @default(false)
 
   // ==========================================================
   // Future Extension
@@ -179,52 +177,51 @@ model TravelSession {
    * 확장용 JSON
    * (향후 새로운 Fact나 옵션 저장)
    */
-  facts                 Json?
+  facts Json?
 
   // ==========================================================
   // Timestamp
   // ==========================================================
 
-  createdAt             DateTime @default(now())
+  createdAt DateTime @default(now())
 
-  updatedAt             DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 }
 
 model WeatherForecast {
-
   // ==========================================================
   // Primary Key
   // ==========================================================
 
-  id        Int      @id @default(autoincrement())
+  id Int @id @default(autoincrement())
 
   // ==========================================================
   // Forecast Information
   // ==========================================================
 
   /// 예보 날짜
-  date      DateTime
+  date DateTime
 
   /// 지역명
-  region    String
+  region String
 
   /// 최저기온
-  minTemp   Float?
+  minTemp Float?
 
   /// 최고기온
-  maxTemp   Float?
+  maxTemp Float?
 
   /// 평균기온
-  avgTemp   Float?
+  avgTemp Float?
 
   /// 강수확률
-  rainProb  Float?
+  rainProb Float?
 
   /**
    * short : 단기예보
    * mid   : 중기예보
    */
-  source    String
+  source String
 
   // ==========================================================
   // Timestamp
@@ -235,4 +232,85 @@ model WeatherForecast {
   updatedAt DateTime @updatedAt
 
   @@unique([date, region], name: "date_region")
+}
+
+model Attraction {
+  id Int @id @default(autoincrement())
+
+  /// 한국관광공사 관광 콘텐츠 ID
+  contentId String @unique
+
+  title           String
+  normalizedTitle String
+  region          String
+  address1        String
+  address2        String?
+  zipCode         String?
+
+  mapx     Float?
+  mapy     Float?
+  mapLevel Int?
+
+  areaCode      String?
+  sigunguCode   String?
+  contentTypeId String?
+
+  category1 String?
+  category2 String?
+  category3 String?
+
+  classification1 String?
+  classification2 String?
+  classification3 String?
+
+  firstImage  String?
+  firstImage2 String?
+  telephone   String?
+
+  copyrightDivisionCode    String?
+  sourceCreatedTime        String?
+  sourceModifiedTime       String?
+  legalDistrictRegionCode  String?
+  legalDistrictSigunguCode String?
+
+  /// 추후 데이터 보강 시 indoor 또는 outdoor 저장
+  indoorOutdoor String?
+
+  searchStats AttractionSearchStat[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([region])
+  @@index([normalizedTitle])
+  @@index([region, indoorOutdoor])
+}
+
+model AttractionSearchStat {
+  id Int @id @default(autoincrement())
+
+  /// 관광지 마스터와 이름이 연결된 경우에만 설정
+  attractionId Int?
+  attraction   Attraction? @relation(fields: [attractionId], references: [id], onDelete: SetNull)
+
+  region         String
+  detailRegion   String?
+  year           Int
+  month          Int
+  yearMonth      DateTime
+  rank           Int
+  placeName      String
+  normalizedName String
+  searchCount    Int
+  middleCategory String
+  smallCategory  String
+  sourceFile     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([attractionId, yearMonth])
+  @@index([region, yearMonth, rank])
+  @@index([region, yearMonth, middleCategory, rank])
+  @@index([normalizedName])
 }

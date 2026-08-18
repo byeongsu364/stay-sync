@@ -67,7 +67,7 @@ function normalizeCompanionType(text) {
  * 동행자 유형 → 테마 매핑
  *
  * 예:
- * 연인 → 데이트, 야경, 카페, 자연
+ * 연인 → 문화관광, 레저스포츠, 쇼핑
  */
 function mapCompanionToThemes(companionType) {
     return themeOntology[companionType] || [];

@@ -73,6 +73,10 @@ function buildFactsFromSession(session) {
 
         selected_places: session.selectedPlaces ?? [],
         related_places: session.relatedPlaces ?? [],
+        recommended_history:
+            Array.isArray(session.facts?.recommended_history)
+                ? session.facts.recommended_history
+                : [],
         recommendation_round: session.recommendationRound ?? 1,
         final_selected_places: session.finalSelectedPlaces ?? [],
         final_route: session.finalRoute ?? null,

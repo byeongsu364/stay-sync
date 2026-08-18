@@ -6,7 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon server.js",
-    "start": "node server.js"
+    "start": "node server.js",
+    "data:import": "node scripts/importAttractionData.js",
+    "data:replace": "node scripts/importAttractionData.js --replace"
   },
   "keywords": [],
   "author": "",
