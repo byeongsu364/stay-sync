@@ -1,4 +1,7 @@
-const { CURRENT_STEP, ROUTE_NUMBER } = require("../data/constants");
+const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants");
+const {
+    searchLocation: searchKakaoLocation,
+} = require("./kakaoLocationService");
 
 /**
  * ==========================================================
@@ -8,42 +11,51 @@ const { CURRENT_STEP, ROUTE_NUMBER } = require("../data/constants");
  * 역할
  * - 숙소 입력
  * - 출발지 입력
- * - 위치 검색(Mock)
- *
- * TODO
- * - Kakao Local API 연동
+ * - Kakao Local API 위치 검색
  * ==========================================================
  */
 
 /**
- * Mock 위치 검색
+ * 위치 검색
  */
-async function searchLocation(keyword) {
-
-    if (!keyword || keyword.trim() === "") {
-        return null;
-    }
-
-    return {
-        name: keyword.trim(),
-        address: keyword.trim(),
-        latitude: 37.5665,
-        longitude: 126.9780,
-    };
+async function searchLocation(keyword, options = {}) {
+    return await searchKakaoLocation({
+        keyword,
+        region: options.region,
+        categoryGroupCode: options.categoryGroupCode,
+    });
 }
 
 /**
  * 숙소 검색
  */
-async function getAccommodationLocation(name) {
-    return await searchLocation(name);
+async function getAccommodationLocation(name, region) {
+    return await searchLocation(name, {
+        region,
+        categoryGroupCode: "AD5",
+    });
 }
 
 /**
  * 출발지 검색
  */
-async function getDepartureLocation(name) {
-    return await searchLocation(name);
+async function getDepartureLocation(name, region) {
+    return await searchLocation(name, { region });
+}
+
+function buildLocationErrorResult({ error, facts, currentStep, field }) {
+    const configurationError = error.code === "KAKAO_KEY_MISSING";
+
+    return {
+        handled: true,
+        facts,
+        route_number: ROUTE_NUMBER.POST_BOOKING,
+        current_step: currentStep,
+        last_question_field: field,
+        reply: configurationError
+            ? "장소 검색 API가 아직 설정되지 않았습니다. 관리자에게 문의해주세요."
+            : "장소 검색 중 오류가 발생했습니다. 잠시 후 다시 입력해주세요.",
+    };
 }
 
 /**
@@ -63,8 +75,21 @@ async function handleLocationInput({
 
     if (currentStep === CURRENT_STEP.ASK_ACCOMMODATION) {
 
-        const location =
-            await getAccommodationLocation(userMessage);
+        let location;
+
+        try {
+            location = await getAccommodationLocation(
+                userMessage,
+                facts.region,
+            );
+        } catch (error) {
+            return buildLocationErrorResult({
+                error,
+                facts,
+                currentStep: CURRENT_STEP.ASK_ACCOMMODATION,
+                field: "accommodation",
+            });
+        }
 
         if (!location) {
 
@@ -95,6 +120,17 @@ async function handleLocationInput({
 
         facts.start_location = facts.accommodation;
 
+        if (facts.service_type === SERVICE_TYPE.ROUTE_ONLY) {
+            return {
+                handled: true,
+                facts,
+                route_number: ROUTE_NUMBER.ROUTE_PLANNING,
+                current_step: CURRENT_STEP.READY_FOR_ROUTE_PLANNING,
+                last_question_field: null,
+                reply: "숙소를 확인했습니다. 날짜별 최적 동선을 계산할게요.",
+            };
+        }
+
         return {
             handled: true,
 
@@ -124,8 +160,21 @@ async function handleLocationInput({
 
     if (currentStep === CURRENT_STEP.ASK_START_LOCATION) {
 
-        const location =
-            await getDepartureLocation(userMessage);
+        let location;
+
+        try {
+            location = await getDepartureLocation(
+                userMessage,
+                facts.region,
+            );
+        } catch (error) {
+            return buildLocationErrorResult({
+                error,
+                facts,
+                currentStep: CURRENT_STEP.ASK_START_LOCATION,
+                field: "departure_location",
+            });
+        }
 
         if (!location) {
 
@@ -156,6 +205,17 @@ async function handleLocationInput({
 
         facts.start_location =
             facts.departure_location;
+
+        if (facts.service_type === SERVICE_TYPE.ROUTE_ONLY) {
+            return {
+                handled: true,
+                facts,
+                route_number: ROUTE_NUMBER.ROUTE_PLANNING,
+                current_step: CURRENT_STEP.READY_FOR_ROUTE_PLANNING,
+                last_question_field: null,
+                reply: "출발지를 확인했습니다. 최적 동선을 계산할게요.",
+            };
+        }
 
         return {
             handled: true,

@@ -11,7 +11,6 @@ function isFactsReady(facts) {
         facts.start_date &&
         facts.end_date &&
         facts.trip_type &&
-        facts.people_count &&
         facts.companion_type;
 
     if (!baseReady) return false;
@@ -33,7 +32,7 @@ function buildFinalConfirmationReply(facts) {
             ? `예약하신 숙소는 ${facts.accommodation?.name}로 확인했습니다.`
             : `출발지는 ${facts.departure_location?.name}로 확인했습니다.`;
 
-    return `${facts.companion_type}과 함께 ${facts.people_count}명이 ${facts.region}로 ${facts.period} 여행을 가시는군요. ${locationText} 지금까지 수집한 여행 정보를 바탕으로 관광지를 추천해드릴까요?`;
+    return `${facts.companion_type}과 함께 ${facts.region}로 ${facts.period} 여행을 가시는군요. ${locationText} 지금까지 수집한 여행 정보를 바탕으로 관광지를 추천해드릴까요?`;
 }
 
 function buildConfirmationResult(facts) {

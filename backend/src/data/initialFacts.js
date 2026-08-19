@@ -3,6 +3,7 @@
  */
 
 const initialFacts = {
+    service_type: null,
     region: null,
 
     period: null,

@@ -25,7 +25,6 @@ function getRollbackFields(target) {
             "accommodation",
             "departure_location",
             "start_location",
-            "people_count",
             "companion_type",
             "themes",
             "selected_places",
@@ -43,7 +42,6 @@ function getRollbackFields(target) {
             "accommodation",
             "departure_location",
             "start_location",
-            "people_count",
             "companion_type",
             "themes",
             "selected_places",
@@ -56,7 +54,6 @@ function getRollbackFields(target) {
         accommodation: [
             "accommodation",
             "start_location",
-            "people_count",
             "companion_type",
             "themes",
             "selected_places",
@@ -69,18 +66,6 @@ function getRollbackFields(target) {
         departure_location: [
             "departure_location",
             "start_location",
-            "people_count",
-            "companion_type",
-            "themes",
-            "selected_places",
-            "related_places",
-            "recommendation_round",
-            "final_selected_places",
-            "final_route",
-        ],
-
-        people_count: [
-            "people_count",
             "companion_type",
             "themes",
             "selected_places",
@@ -119,7 +104,6 @@ function rollbackFacts(facts = {}, rollbackFields = []) {
         if (field === "departure_location") nextFacts.departure_location = null;
         if (field === "start_location") nextFacts.start_location = null;
 
-        if (field === "people_count") nextFacts.people_count = null;
         if (field === "companion_type") nextFacts.companion_type = null;
 
         if (field === "themes") nextFacts.themes = [];
@@ -159,12 +143,6 @@ function getCorrectionStep(target) {
             lastQuestionField: "departure_location",
         },
 
-        people_count: {
-            currentStep: CURRENT_STEP.ASK_PEOPLE_COUNT,
-            routeNumber: ROUTE_NUMBER.POST_BOOKING,
-            lastQuestionField: "people_count",
-        },
-
         companion_type: {
             currentStep: CURRENT_STEP.ASK_COMPANION_TYPE,
             routeNumber: ROUTE_NUMBER.POST_BOOKING,
@@ -196,10 +174,6 @@ function buildCorrectionReply(target, facts = {}) {
 
     if (target === "departure_location") {
         return "알겠습니다. 당일치기 출발지를 다시 알려주세요.";
-    }
-
-    if (target === "people_count") {
-        return "알겠습니다. 총 몇 명이 여행하시나요?";
     }
 
     if (target === "companion_type") {

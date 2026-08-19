@@ -27,12 +27,13 @@ async function createSession(sessionId) {
         data: {
             sessionId,
 
-            currentStep: "ASK_REGION",
+            currentStep: "ASK_SERVICE_TYPE",
             routeNumber: 1,
-            lastQuestionField: "region",
+            lastQuestionField: "service_type",
             correctionTarget: null,
             rollbackFields: null,
             language: "ko",
+            serviceType: null,
 
             region: null,
             period: null,
@@ -50,7 +51,6 @@ async function createSession(sessionId) {
             departureMapx: null,
             departureMapy: null,
 
-            peopleCount: null,
             companionType: null,
 
             themes: [],
@@ -65,6 +65,7 @@ async function createSession(sessionId) {
             isCompleted: false,
 
             facts: {
+                service_type: null,
                 region: null,
                 period: null,
                 start_date: null,
@@ -73,7 +74,6 @@ async function createSession(sessionId) {
                 accommodation: null,
                 departure_location: null,
                 start_location: null,
-                people_count: null,
                 companion_type: null,
                 themes: [],
                 selected_places: [],

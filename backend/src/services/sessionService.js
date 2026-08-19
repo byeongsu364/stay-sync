@@ -22,6 +22,7 @@ async function loadSession(sessionId) {
 
 function buildFactsFromSession(session) {
     return {
+        service_type: session.serviceType ?? null,
         region: session.region ?? null,
         period: session.period ?? null,
         start_date: session.startDate
@@ -67,7 +68,6 @@ function buildFactsFromSession(session) {
                     }
                     : null,
 
-        people_count: session.peopleCount ?? null,
         companion_type: session.companionType ?? null,
         themes: session.themes ?? [],
 
@@ -78,6 +78,7 @@ function buildFactsFromSession(session) {
                 ? session.facts.recommended_history
                 : [],
         recommendation_round: session.recommendationRound ?? 1,
+        travel_days: session.facts?.travel_days ?? null,
         final_selected_places: session.finalSelectedPlaces ?? [],
         final_route: session.finalRoute ?? null,
     };
@@ -100,6 +101,7 @@ function buildSessionDataFromFacts({
         lastQuestionField,
         correctionTarget: correctionTarget ?? null,
         rollbackFields: rollbackFields ?? null,
+        serviceType: facts.service_type ?? null,
 
         region: facts.region ?? null,
         period: facts.period ?? null,
@@ -117,7 +119,6 @@ function buildSessionDataFromFacts({
         departureMapx: departure?.mapx ?? null,
         departureMapy: departure?.mapy ?? null,
 
-        peopleCount: facts.people_count ?? null,
         companionType: facts.companion_type ?? null,
 
         themes: facts.themes ?? [],

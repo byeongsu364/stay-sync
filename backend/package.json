@@ -8,7 +8,9 @@
     "dev": "nodemon server.js",
     "start": "node server.js",
     "data:import": "node scripts/importAttractionData.js",
-    "data:replace": "node scripts/importAttractionData.js --replace"
+    "data:replace": "node scripts/importAttractionData.js --replace",
+    "route:start": "cd route-server && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000",
+    "route:dev": "cd route-server && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --reload"
   },
   "keywords": [],
   "author": "",

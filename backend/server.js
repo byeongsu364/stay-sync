@@ -5,6 +5,10 @@ const env = require("./src/config/env");
 const { connectDB } = require("./src/config/db");
 const chatRoutes = require("./src/routes/chatRoutes");
 const { startWeatherScheduler } = require("./src/jobs/weatherScheduler");
+const {
+    ensureRouteServer,
+    stopRouteServer,
+} = require("./src/services/routeServerProcessService");
 
 const app = express();
 
@@ -23,6 +27,7 @@ app.use("/api/chat", chatRoutes);
 
 async function startServer() {
     await connectDB();
+    await ensureRouteServer();
 
     startWeatherScheduler();
 
@@ -31,4 +36,18 @@ async function startServer() {
     });
 }
 
-startServer();
+process.once("SIGINT", () => {
+    stopRouteServer();
+    process.exit(0);
+});
+
+process.once("SIGTERM", () => {
+    stopRouteServer();
+    process.exit(0);
+});
+
+startServer().catch((error) => {
+    console.error("Server Startup Error:", error.message);
+    stopRouteServer();
+    process.exit(1);
+});

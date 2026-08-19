@@ -1,4 +1,6 @@
 const { handleChat } = require("../services/chatService");
+const { searchAttractionsByName } = require("../repositories/attractionRepository");
+const { searchLocations } = require("../services/kakaoLocationService");
 
 /**
  * ==========================================================
@@ -49,6 +51,45 @@ async function chat(req, res) {
     }
 }
 
+async function autocompleteAttractions(req, res) {
+    try {
+        const query = String(req.query.q || "").trim();
+        if (query.length < 1) {
+            return res.json({ success: true, data: [] });
+        }
+
+        const attractions = await searchAttractionsByName({ name: query });
+        return res.json({
+            success: true,
+            data: attractions.map((attraction) => ({
+                id: attraction.id,
+                name: attraction.title,
+                region: attraction.region,
+                address: [attraction.address1, attraction.address2].filter(Boolean).join(" "),
+                mapx: attraction.mapx,
+                mapy: attraction.mapy,
+            })),
+        });
+    } catch (error) {
+        console.error("Attraction Autocomplete Error:", error.message);
+        return res.status(500).json({ success: false, message: "관광지 검색 중 오류가 발생했습니다." });
+    }
+}
+
+async function autocompleteLocations(req, res) {
+    try {
+        const query = String(req.query.q || "").trim();
+        if (query.length < 1) return res.json({ success: true, data: [] });
+        const locations = await searchLocations({ query });
+        return res.json({ success: true, data: locations.slice(0, 8) });
+    } catch (error) {
+        console.error("Location Autocomplete Error:", error.message);
+        return res.status(500).json({ success: false, message: "장소 검색 중 오류가 발생했습니다." });
+    }
+}
+
 module.exports = {
     chat,
+    autocompleteAttractions,
+    autocompleteLocations,
 };

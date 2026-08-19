@@ -49,6 +49,9 @@ model TravelSession {
    */
   language String @default("ko")
 
+  /// ACCOMMODATION | ATTRACTION | ROUTE_ONLY
+  serviceType String?
+
   // ==========================================================
   // Travel Facts
   // ==========================================================
@@ -98,8 +101,6 @@ model TravelSession {
   // ==========================================================
   // Companion
   // ==========================================================
-
-  peopleCount Int?
 
   companionType String?
 
