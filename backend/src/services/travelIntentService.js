@@ -109,7 +109,9 @@ ${userMessage}
         facts: mergedFacts,
         route_number: stepResult.route_number,
         current_step: stepResult.current_step,
-        reply: llmResult?.reply || stepResult.reply,
+        // LLM이 당일치기에도 숙소 안내 문구를 반환할 수 있으므로,
+        // 확정된 facts와 상태로 만든 안내 문구를 항상 사용한다.
+        reply: stepResult.reply,
     };
 }
 
