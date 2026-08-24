@@ -25,6 +25,7 @@ function MessageText({ text }) {
 }
 
 function App() {
+  const browserLocale = navigator.language || 'ko-KR'
   // 현재 UI는 대화 내역을 복원하지 않으므로 새 화면에는 새 세션을 사용한다.
   // 이전 세션 ID만 재사용하면 첫 선택이 이전 단계의 답변으로 오인될 수 있다.
   const [sessionId] = useState(() => crypto.randomUUID())
@@ -39,10 +40,33 @@ function App() {
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [currentStep, setCurrentStep] = useState('ASK_SERVICE_TYPE')
+  const [currentFacts, setCurrentFacts] = useState({})
   const [selectedAttractions, setSelectedAttractions] = useState([])
+  const [selectedRecommendations, setSelectedRecommendations] = useState([])
   const [suggestions, setSuggestions] = useState([])
+  const [selectedLocation, setSelectedLocation] = useState(null)
+  const [detailAttraction, setDetailAttraction] = useState(null)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+
+  useEffect(() => {
+    if (browserLocale.toLowerCase().startsWith('ko')) return
+    const controller = new AbortController()
+    fetch(`${API_BASE_URL}/api/chat/greeting?locale=${encodeURIComponent(browserLocale)}`, {
+      signal: controller.signal,
+    })
+      .then((response) => response.json())
+      .then((body) => {
+        if (!body.success) return
+        setMessages((current) => current.map((message) => (
+          message.id === 'greeting'
+            ? { ...message, text: body.data.reply, quickReplies: body.data.quickReplies }
+            : message
+        )))
+      })
+      .catch(() => {})
+    return () => controller.abort()
+  }, [browserLocale])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -51,10 +75,11 @@ function App() {
   useEffect(() => {
     const isAttractionSearch = currentStep === 'ASK_ROUTE_ATTRACTIONS'
     const isDepartureSearch = currentStep === 'ASK_START_LOCATION'
+    const isAccommodationSearch = currentStep === 'ASK_ACCOMMODATION'
     const query = isAttractionSearch
       ? (input.startsWith('/') ? input.slice(1).trim() : '')
       : input.trim()
-    if ((!isAttractionSearch && !isDepartureSearch) || !query) {
+    if ((!isAttractionSearch && !isDepartureSearch && !isAccommodationSearch) || !query) {
       setSuggestions([])
       return undefined
     }
@@ -63,8 +88,11 @@ function App() {
     const timer = window.setTimeout(async () => {
       try {
         const endpoint = isAttractionSearch ? 'attractions' : 'locations'
+        const locationParams = isAccommodationSearch
+          ? `&type=accommodation&region=${encodeURIComponent(currentFacts.region || '')}`
+          : ''
         const response = await fetch(
-          `${API_BASE_URL}/api/chat/${endpoint}/autocomplete?q=${encodeURIComponent(query)}`,
+          `${API_BASE_URL}/api/chat/${endpoint}/autocomplete?q=${encodeURIComponent(query)}${locationParams}`,
           { signal: controller.signal },
         )
         const body = await response.json()
@@ -78,15 +106,22 @@ function App() {
       window.clearTimeout(timer)
       controller.abort()
     }
-  }, [currentStep, input])
+  }, [currentStep, currentFacts.region, input])
 
   async function submitMessage(rawMessage, displayText = rawMessage) {
     const routeSelection = currentStep === 'ASK_ROUTE_ATTRACTIONS' && selectedAttractions.length > 0
-    const message = routeSelection
-      ? selectedAttractions.map(({ name }) => name).join(', ')
+    const recommendationSelection = currentStep === 'RECOMMENDATION_SHOWN'
+      && selectedRecommendations.length > 0
+    const selectedItems = routeSelection
+      ? selectedAttractions
+      : recommendationSelection
+        ? selectedRecommendations
+        : null
+    const message = selectedItems
+      ? selectedItems.map(({ name }) => name).join(', ')
       : String(rawMessage).trim()
-    const visibleMessage = routeSelection
-      ? selectedAttractions.map(({ name }) => name).join(', ')
+    const visibleMessage = selectedItems
+      ? selectedItems.map(({ name }) => `#${name}`).join(' ')
       : displayText
     if (!message || isSending) return
 
@@ -101,7 +136,7 @@ function App() {
       const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId, message }),
+        body: JSON.stringify({ sessionId, message, location: selectedLocation, locale: browserLocale }),
       })
       const body = await response.json()
       if (!response.ok || !body.success) {
@@ -109,11 +144,17 @@ function App() {
       }
       const result = body.data
       setCurrentStep(result.currentStep)
+      setCurrentFacts(result.facts || {})
       if (currentStep === 'ASK_ROUTE_ATTRACTIONS') setSelectedAttractions([])
+      if (currentStep === 'RECOMMENDATION_SHOWN') setSelectedRecommendations([])
       setMessages((current) => [...current, {
-        id: crypto.randomUUID(), sender: 'bot', text: result.reply,
+        id: crypto.randomUUID(), sender: 'bot',
+        text: result.recommendations?.length
+          ? '추천 관광지를 클릭해서 선택해주세요. 여러 곳을 선택할 수 있습니다.'
+          : result.reply,
         kakaoRouteLinks: result.kakaoRouteLinks || null,
         quickReplies: result.quickReplies || null,
+        recommendations: result.recommendations || null,
       }])
     } catch (error) {
       setMessages((current) => [...current, {
@@ -140,11 +181,20 @@ function App() {
     ))
     setInput('/')
     setSuggestions([])
+    setSelectedLocation(null)
     inputRef.current?.focus()
   }
 
   function removeAttraction(id) {
     setSelectedAttractions((current) => current.filter((attraction) => attraction.id !== id))
+  }
+
+  function toggleRecommendation(recommendation) {
+    setSelectedRecommendations((current) => (
+      current.some(({ id }) => id === recommendation.id)
+        ? current.filter(({ id }) => id !== recommendation.id)
+        : [...current, recommendation]
+    ))
   }
 
   function selectSuggestion(suggestion) {
@@ -153,6 +203,7 @@ function App() {
       return
     }
     setInput(suggestion.name)
+    setSelectedLocation(suggestion)
     setSuggestions([])
     inputRef.current?.focus()
   }
@@ -190,6 +241,48 @@ function App() {
                     ))}
                   </div>
                 )}
+                {message.recommendations && (
+                  <div className="recommendation-cards">
+                    {message.recommendations.map((recommendation, recommendationIndex) => {
+                      const selected = selectedRecommendations.some(({ id }) => id === recommendation.id)
+                      const isDistance = recommendation.recommendationType === 'distance'
+                      const typeRank = message.recommendations
+                        .slice(0, recommendationIndex + 1)
+                        .filter((item) => (item.recommendationType === 'distance') === isDistance)
+                        .length
+                      const rank = recommendation.popularityPosition || typeRank
+                      return (
+                        <div key={recommendation.id}
+                          className={`recommendation-card ${selected ? 'selected' : ''}`}
+                          role="button"
+                          tabIndex={messageIndex === messages.length - 1 ? 0 : -1}
+                          aria-pressed={selected}
+                          onClick={() => {
+                            if (!isSending && messageIndex === messages.length - 1) toggleRecommendation(recommendation)
+                          }}
+                          onKeyDown={(event) => {
+                            if ((event.key === 'Enter' || event.key === ' ') && !isSending && messageIndex === messages.length - 1) {
+                              event.preventDefault()
+                              toggleRecommendation(recommendation)
+                            }
+                          }}>
+                          {recommendation.image && <img src={recommendation.image} alt={`${recommendation.name} 대표 사진`} loading="lazy" />}
+                          <span className="recommendation-content">
+                            <strong>{selected ? '# ' : ''}{recommendation.name}</strong>
+                            <small>{isDistance ? '거리순' : '인기순'} {rank}위</small>
+                            {recommendation.description && <span className="recommendation-description">{recommendation.description}</span>}
+                            <span>{recommendation.theme} · {recommendation.address}</span>
+                            {recommendation.roadDistanceKm != null && <small>숙소에서 {recommendation.roadDistanceKm}km</small>}
+                            <button className="detail-button" type="button" onClick={(event) => {
+                              event.stopPropagation()
+                              setDetailAttraction(recommendation)
+                            }}>상세보기</button>
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </article>
           ))}
@@ -206,11 +299,22 @@ function App() {
                 <button type="button" onClick={() => removeAttraction(attraction.id)} aria-label={`${attraction.name} 삭제`}>×</button>
               </span>
             ))}
-            <input ref={inputRef} id="travel-message" value={input} onChange={(event) => setInput(event.target.value)}
+            {currentStep === 'RECOMMENDATION_SHOWN' && selectedRecommendations.map((recommendation) => (
+              <span className="attraction-chip" key={recommendation.id}>
+                #{recommendation.name}
+                <button type="button" onClick={() => toggleRecommendation(recommendation)} aria-label={`${recommendation.name} 삭제`}>×</button>
+              </span>
+            ))}
+            <input ref={inputRef} id="travel-message" value={input} onChange={(event) => {
+              setInput(event.target.value)
+              setSelectedLocation(null)
+            }}
               placeholder={currentStep === 'ASK_ROUTE_ATTRACTIONS'
                 ? '/관광지명을 입력하세요'
                 : currentStep === 'ASK_START_LOCATION'
                   ? '출발지를 입력하세요'
+                  : currentStep === 'ASK_ACCOMMODATION'
+                    ? `${currentFacts.region || ''} 숙소를 입력하세요`.trim()
                   : '메세지를 입력해주세요'}
               autoComplete="off" disabled={isSending} />
             {suggestions.length > 0 && (
@@ -226,9 +330,32 @@ function App() {
               </ul>
             )}
           </div>
-          <button type="submit" disabled={(!input.trim() && selectedAttractions.length === 0) || isSending}>전송</button>
+          <button type="submit" disabled={(
+            !input.trim()
+            && selectedAttractions.length === 0
+            && selectedRecommendations.length === 0
+          ) || isSending}>전송</button>
         </form>
       </section>
+      {detailAttraction && (
+        <div className="detail-backdrop" role="presentation" onMouseDown={() => setDetailAttraction(null)}>
+          <section className="attraction-detail" role="dialog" aria-modal="true" aria-labelledby="attraction-detail-title"
+            onMouseDown={(event) => event.stopPropagation()}>
+            <button className="detail-close" type="button" aria-label="상세정보 닫기" onClick={() => setDetailAttraction(null)}>×</button>
+            {detailAttraction.image && <img src={detailAttraction.image} alt={`${detailAttraction.name} 대표 사진`} />}
+            <div className="detail-body">
+              <small>{detailAttraction.recommendationType === 'distance' ? '거리순 추천' : '인기순 추천'}</small>
+              <h2 id="attraction-detail-title">{detailAttraction.name}</h2>
+              <p>{detailAttraction.description || '등록된 상세 설명이 없습니다.'}</p>
+              <dl>
+                <div><dt>테마</dt><dd>{detailAttraction.theme || '-'}</dd></div>
+                <div><dt>주소</dt><dd>{detailAttraction.address || '-'}</dd></div>
+                {detailAttraction.roadDistanceKm != null && <div><dt>숙소 기준 거리</dt><dd>{detailAttraction.roadDistanceKm}km</dd></div>}
+              </dl>
+            </div>
+          </section>
+        </div>
+      )}
     </main>
   )
 }

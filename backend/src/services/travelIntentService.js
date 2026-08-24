@@ -1,7 +1,7 @@
 const travelIntentPrompt = require("../prompts/travelIntentPrompt");
 const { callLLMJson } = require("./llmService");
 const { getToday, isOneDayTrip } = require("../utils/dateUtils");
-const { CURRENT_STEP, ROUTE_NUMBER } = require("../data/constants");
+const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants");
 
 /**
  * 여행 의도 분석 서비스
@@ -71,6 +71,14 @@ function decideTravelIntentStep(facts) {
             route_number: ROUTE_NUMBER.POST_BOOKING,
             current_step: "ASK_START_LOCATION",
             reply: `${facts.region} 당일치기 여행이시군요. 동선 추천을 위해 출발지를 입력해주세요.`,
+        };
+    }
+
+    if (facts.service_type === SERVICE_TYPE.ATTRACTION) {
+        return {
+            route_number: ROUTE_NUMBER.POST_BOOKING,
+            current_step: CURRENT_STEP.ASK_ACCOMMODATION,
+            reply: "예약하신 숙소명이나 주소를 입력해주세요.",
         };
     }
 

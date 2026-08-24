@@ -1,6 +1,6 @@
 const REGIONS = require("../data/regionData");
 const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants");
-const { searchLocation } = require("./locationInputService");
+const { searchAttractionsByName } = require("../repositories/attractionRepository");
 
 const SERVICE_TYPE_PROMPT = [
     "어디로 여행을 가시나요?",
@@ -58,27 +58,44 @@ function selectServiceType(input, facts) {
     };
 }
 
-async function handleAttractionRegionInput(input, facts) {
-    const region = REGIONS.find((item) => String(input).includes(item));
+function normalizeName(value) {
+    return String(value || "")
+        .normalize("NFC")
+        .toLowerCase()
+        .replace(/[^0-9a-z가-힣]/g, "");
+}
+
+async function resolveSupportedDestination(input, facts = {}) {
+    const text = String(input || "").trim();
+    const region = REGIONS.find((item) => text.includes(item));
     if (region) {
         return { ...facts, region };
     }
 
-    const location = await searchLocation(input);
-    if (!location) return null;
-    const locationRegion = REGIONS.find((item) => location.address?.includes(item));
-    if (!locationRegion) return null;
+    const attractions = await searchAttractionsByName({ name: text, limit: 20 });
+    const normalizedInput = normalizeName(text);
+    const attraction = attractions.find(
+        ({ title }) => normalizeName(title) === normalizedInput,
+    );
+    if (!attraction) return null;
 
     return {
         ...facts,
-        region: locationRegion,
+        region: attraction.region,
         interest_place: {
-            name: location.name,
-            address: location.address,
-            mapx: location.longitude,
-            mapy: location.latitude,
+            id: attraction.id,
+            name: attraction.title,
+            address: [attraction.address1, attraction.address2]
+                .filter(Boolean)
+                .join(" "),
+            mapx: attraction.mapx,
+            mapy: attraction.mapy,
         },
     };
+}
+
+async function handleAttractionRegionInput(input, facts) {
+    return await resolveSupportedDestination(input, facts);
 }
 
 module.exports = {
@@ -87,5 +104,6 @@ module.exports = {
     classifyServiceType,
     selectServiceType,
     handleAttractionRegionInput,
+    resolveSupportedDestination,
     routeNumber: ROUTE_NUMBER.TRAVEL_INFO,
 };

@@ -3,6 +3,7 @@ const {
     findRecommendationCandidates,
 } = require("../repositories/attractionRepository");
 const { getRoadDistances } = require("./roadNetworkService");
+const { enrichRecommendationItems } = require("./tourApiService");
 
 function normalizeRound(recommendationRound) {
     const parsed = Number.parseInt(recommendationRound, 10);
@@ -57,6 +58,7 @@ function toRecommendationItem(attraction) {
         mapx: attraction.mapx,
         mapy: attraction.mapy,
         image: attraction.firstImage,
+        description: attraction.description || null,
         indoorOutdoor: attraction.indoorOutdoor,
         theme: attraction.middleCategory,
         category: attraction.smallCategory,
@@ -112,9 +114,9 @@ async function recommendPopularAttractions({
     });
 
     const hasMore = candidates.length > page.limit;
-    const recommendations = candidates
-        .slice(0, page.limit)
-        .map(toRecommendationItem);
+    const recommendations = await enrichRecommendationItems(
+        candidates.slice(0, page.limit).map(toRecommendationItem),
+    );
     const recommendationIds = recommendations.map(({ id }) => id);
     const nextHistory = [...new Set([...historyIds, ...recommendationIds])];
     const exhausted = recommendations.length === 0;
@@ -250,9 +252,9 @@ async function recommendAttractions({
                 .slice(0, page.limit + 1);
 
             hasMoreNearby = pageNearby.length > page.limit;
-            nearby = pageNearby
-                .slice(0, page.limit)
-                .map(toRecommendationItem);
+            nearby = await enrichRecommendationItems(
+                pageNearby.slice(0, page.limit).map(toRecommendationItem),
+            );
         } catch (error) {
             distanceUnavailable = true;
         }

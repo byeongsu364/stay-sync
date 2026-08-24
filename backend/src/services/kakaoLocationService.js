@@ -115,10 +115,14 @@ async function searchLocation({ keyword, region, categoryGroupCode = null }) {
 async function searchLocations({ query, categoryGroupCode = null }) {
     const trimmedQuery = String(query || "").trim();
     if (!trimmedQuery) return [];
-    return await requestKeywordSearch({
+    let locations = await requestKeywordSearch({
         query: trimmedQuery,
         categoryGroupCode,
     });
+    if (locations.length === 0 && categoryGroupCode) {
+        locations = await requestKeywordSearch({ query: trimmedQuery });
+    }
+    return locations;
 }
 
 module.exports = {

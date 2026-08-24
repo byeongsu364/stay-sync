@@ -39,8 +39,25 @@ async function getAccommodationLocation(name, region) {
 /**
  * 출발지 검색
  */
-async function getDepartureLocation(name, region) {
-    return await searchLocation(name, { region });
+async function getDepartureLocation(name) {
+    // 출발지는 여행 지역 밖에 있을 수 있으므로 지역명을 검색어에 붙이지 않는다.
+    return await searchLocation(name);
+}
+
+function normalizeSelectedLocation(location) {
+    if (!location) return null;
+    const longitude = Number(location.longitude ?? location.mapx);
+    const latitude = Number(location.latitude ?? location.mapy);
+    if (!location.name || !Number.isFinite(longitude) || !Number.isFinite(latitude)) {
+        return null;
+    }
+    return {
+        name: String(location.name),
+        address: String(location.address || ""),
+        longitude,
+        latitude,
+        kakaoPlaceId: location.kakaoPlaceId || null,
+    };
 }
 
 function buildLocationErrorResult({ error, facts, currentStep, field }) {
@@ -65,6 +82,7 @@ async function handleLocationInput({
     userMessage,
     facts,
     currentStep,
+    selectedLocation,
 }) {
 
     /**
@@ -78,10 +96,8 @@ async function handleLocationInput({
         let location;
 
         try {
-            location = await getAccommodationLocation(
-                userMessage,
-                facts.region,
-            );
+            location = normalizeSelectedLocation(selectedLocation)
+                || await getAccommodationLocation(userMessage, facts.region);
         } catch (error) {
             return buildLocationErrorResult({
                 error,
@@ -163,10 +179,8 @@ async function handleLocationInput({
         let location;
 
         try {
-            location = await getDepartureLocation(
-                userMessage,
-                facts.region,
-            );
+            location = normalizeSelectedLocation(selectedLocation)
+                || await getDepartureLocation(userMessage);
         } catch (error) {
             return buildLocationErrorResult({
                 error,
@@ -252,5 +266,6 @@ module.exports = {
     searchLocation,
     getAccommodationLocation,
     getDepartureLocation,
+    normalizeSelectedLocation,
     handleLocationInput,
 };

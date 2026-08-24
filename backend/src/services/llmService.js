@@ -50,6 +50,8 @@ async function callLLM(systemPrompt, userPrompt) {
                     content: userPrompt,
                 },
             ],
+        }, {
+            timeout: 30000,
         });
 
         return response.data?.message?.content || "";

@@ -21,6 +21,7 @@ const {
     SERVICE_TYPE_OPTIONS,
     selectServiceType,
     handleAttractionRegionInput,
+    resolveSupportedDestination,
 } = require("./serviceTypeService");
 const {
     parseTravelDays,
@@ -49,7 +50,7 @@ const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants"
  * ==========================================================
  */
 
-async function handleChat({ sessionId, userMessage }) {
+async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
 
     const session =
         await sessionService.loadSession(sessionId);
@@ -148,23 +149,33 @@ async function handleChat({ sessionId, userMessage }) {
 
         const selection = selectServiceType(message, facts);
         if (!selection.handled) {
-            const regionFacts = {
+            const destinationFacts = await resolveSupportedDestination(message, {
                 ...facts,
                 service_type: SERVICE_TYPE.ACCOMMODATION,
-                region: message,
-            };
+            });
+
+            if (!destinationFacts) {
+                return {
+                    reply:
+                        "지원하지 않는 여행지입니다. 아래 10개 지역 또는 보유 관광지의 정확한 이름을 입력해주세요.\n\n"
+                        + "고양, 파주, 의정부, 양주, 동두천, 포천, 남양주, 구리, 가평, 연천",
+                    currentStep: CURRENT_STEP.ASK_SERVICE_TYPE,
+                    facts,
+                    quickReplies: SERVICE_TYPE_OPTIONS,
+                };
+            }
 
             await sessionService.saveConversationState({
                 sessionId,
-                facts: regionFacts,
+                facts: destinationFacts,
                 currentStep: CURRENT_STEP.ASK_PERIOD,
                 routeNumber: ROUTE_NUMBER.TRAVEL_INFO,
                 lastQuestionField: "period",
             });
             return {
-                reply: `${message}으로 여행을 가시는군요. 언제부터 언제까지 여행하시나요?`,
+                reply: `${destinationFacts.region}으로 여행을 가시는군요. 언제부터 언제까지 여행하시나요?`,
                 currentStep: CURRENT_STEP.ASK_PERIOD,
-                facts: regionFacts,
+                facts: destinationFacts,
             };
         }
 
@@ -340,6 +351,7 @@ async function handleChat({ sessionId, userMessage }) {
         const selectionFacts = {
             ...facts,
             selected_places: selectionResult.selectedPlaces,
+            last_selected_place_ids: selectionResult.newSelections.map(({ id }) => id),
         };
 
         await sessionService.saveConversationState({
@@ -365,11 +377,48 @@ async function handleChat({ sessionId, userMessage }) {
      */
 
     if (session.currentStep === CURRENT_STEP.ASK_MORE_RECOMMENDATION) {
-        const answer = classifyMoreRecommendationAnswer(message);
+        const answer = await classifyMoreRecommendationAnswer(message);
+
+        if (answer === "undo") {
+            const recordedIds = facts.last_selected_place_ids || [];
+            const currentRecommendationIds = new Set(
+                facts.related_places.map(({ id }) => String(id)),
+            );
+            const lastSelectedIds = new Set(
+                (recordedIds.length > 0
+                    ? recordedIds
+                    : facts.selected_places
+                        .filter(({ id }) => currentRecommendationIds.has(String(id)))
+                        .map(({ id }) => id)
+                ).map(String),
+            );
+            const selectionFacts = {
+                ...facts,
+                selected_places: facts.selected_places.filter(
+                    ({ id }) => !lastSelectedIds.has(String(id)),
+                ),
+                last_selected_place_ids: [],
+            };
+
+            await sessionService.saveConversationState({
+                sessionId,
+                facts: selectionFacts,
+                currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
+                routeNumber: ROUTE_NUMBER.RECOMMENDATION,
+                lastQuestionField: "selected_places",
+            });
+
+            return {
+                reply: "직전에 선택한 관광지를 취소했습니다. 추천 목록에서 다시 선택해주세요.",
+                currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
+                facts: selectionFacts,
+                recommendations: facts.related_places,
+            };
+        }
 
         if (answer === "unknown") {
             return {
-                reply: "관광지를 더 추천받으시려면 '네', 선택을 마치려면 '아니요'라고 입력해주세요.",
+                reply: "관광지를 더 추천받을지, 지금 선택을 마칠지 편하게 말씀해주세요.",
                 currentStep: CURRENT_STEP.ASK_MORE_RECOMMENDATION,
                 facts,
             };
@@ -480,9 +529,10 @@ async function handleChat({ sessionId, userMessage }) {
 
     const locationResult =
         await handleLocationInput({
-            userMessage: message,
-            facts,
-            currentStep: session.currentStep,
+        userMessage: message,
+        facts,
+        currentStep: session.currentStep,
+        selectedLocation,
         });
 
     if (locationResult.handled) {

@@ -13,6 +13,12 @@ module.exports = {
         serviceKey: process.env.KMA_SERVICE_KEY,
     },
 
+    tourApi: {
+        serviceKey:
+            process.env.TOUR_API_SERVICE_KEY
+            || process.env.KMA_SERVICE_KEY,
+    },
+
     airQuality: {
         token: process.env.WAQI_TOKEN,
     },

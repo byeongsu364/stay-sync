@@ -12,8 +12,18 @@ const { CURRENT_STEP, ROUTE_NUMBER } = require("../data/constants");
  * ==========================================================
  */
 
-function buildYanoljaUrl(region) {
-    return `https://www.yanolja.com/search/${encodeURIComponent(region)}`;
+function buildYanoljaUrl(region, startDate, endDate) {
+    const url = new URL(
+        `https://nol.yanolja.com/discovery/list/search`,
+    );
+    url.searchParams.set("q", region);
+
+    if (startDate && endDate) {
+        url.searchParams.set("checkInDate", startDate);
+        url.searchParams.set("checkOutDate", endDate);
+    }
+
+    return url.toString();
 }
 
 function handleAccommodationStep(facts) {
@@ -34,7 +44,11 @@ function handleAccommodationStep(facts) {
     if (facts.trip_type === "숙박") {
 
         const yanoljaUrl =
-            buildYanoljaUrl(facts.region);
+            buildYanoljaUrl(
+                facts.region,
+                facts.start_date,
+                facts.end_date,
+            );
 
         return {
             handled: true,

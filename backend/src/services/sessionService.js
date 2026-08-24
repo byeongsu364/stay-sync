@@ -23,6 +23,7 @@ async function loadSession(sessionId) {
 function buildFactsFromSession(session) {
     return {
         service_type: session.serviceType ?? null,
+        interest_place: session.facts?.interest_place ?? null,
         region: session.region ?? null,
         period: session.period ?? null,
         start_date: session.startDate
@@ -72,6 +73,10 @@ function buildFactsFromSession(session) {
         themes: session.themes ?? [],
 
         selected_places: session.selectedPlaces ?? [],
+        last_selected_place_ids:
+            Array.isArray(session.facts?.last_selected_place_ids)
+                ? session.facts.last_selected_place_ids
+                : [],
         related_places: session.relatedPlaces ?? [],
         recommended_history:
             Array.isArray(session.facts?.recommended_history)

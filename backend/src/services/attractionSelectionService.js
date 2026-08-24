@@ -53,29 +53,55 @@ function selectAttractions({ userMessage, recommendations = [], selectedPlaces =
         newSelections: selections,
         reply:
             `${selectedNames}을(를) 선택했습니다.\n\n`
-            + "관광지를 더 추천받으시겠어요? (네/아니요)",
+            + "관광지를 더 추천받으시겠어요?",
     };
 }
 
-function classifyMoreRecommendationAnswer(userMessage) {
+function classifyMoreRecommendationFallback(userMessage) {
     const message = normalizeText(userMessage);
 
+    const undoKeywords = [
+        "잘못", "실수", "선택취소", "되돌", "이전으로", "다시선택",
+    ];
+
     const negativeKeywords = [
-        "아니", "아니요", "괜찮", "됐어", "끝", "완료", "그만",
+        "아니", "아니요", "ㄴㄴ", "노노", "싫어", "필요없", "괜찮", "됐어", "끝", "완료", "그만",
     ];
-    const positiveKeywords = [
-        "네", "예", "응", "좋아", "추가", "더추천", "더", "받을게",
-    ];
+    const exactPositiveAnswers = ["네", "예", "응", "어", "ㅇㅇ", "그래", "좋아"];
+    const positiveKeywords = ["계속", "추가", "더추천", "더보여", "받을게"];
+
+    if (undoKeywords.some((keyword) => message.includes(keyword))) {
+        return "undo";
+    }
 
     if (negativeKeywords.some((keyword) => message.includes(keyword))) {
         return "no";
     }
 
-    if (positiveKeywords.some((keyword) => message.includes(keyword))) {
+    if (
+        exactPositiveAnswers.includes(message) ||
+        positiveKeywords.some((keyword) => message.includes(keyword))
+    ) {
         return "yes";
     }
 
     return "unknown";
+}
+
+async function classifyMoreRecommendationAnswer(userMessage) {
+    try {
+        const result = await callLLMJson(
+            moreRecommendationPrompt,
+            `사용자 입력:\n${String(userMessage || "")}`,
+        );
+        if (["yes", "no", "undo", "unknown"].includes(result?.answer)) {
+            return result.answer;
+        }
+    } catch (error) {
+        console.warn("추가 추천 의도 LLM 분류 실패, 기본 분류를 사용합니다.");
+    }
+
+    return classifyMoreRecommendationFallback(userMessage);
 }
 
 module.exports = {
@@ -83,3 +109,5 @@ module.exports = {
     selectAttractions,
     classifyMoreRecommendationAnswer,
 };
+const moreRecommendationPrompt = require("../prompts/moreRecommendationPrompt");
+const { callLLMJson } = require("./llmService");
