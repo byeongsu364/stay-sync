@@ -89,6 +89,13 @@ function classifyMoreRecommendationFallback(userMessage) {
 }
 
 async function classifyMoreRecommendationAnswer(userMessage) {
+    // 명확한 짧은 답변은 LLM 호출 없이 즉시 처리한다. 로컬 LLM이 느리거나
+    // 일시적으로 내려가 있어도 "아니", "ㄴㄴ", "그만" 같은 입력은 막히지 않는다.
+    const fallbackAnswer = classifyMoreRecommendationFallback(userMessage);
+    if (fallbackAnswer !== "unknown") {
+        return fallbackAnswer;
+    }
+
     try {
         const result = await callLLMJson(
             moreRecommendationPrompt,
@@ -101,7 +108,7 @@ async function classifyMoreRecommendationAnswer(userMessage) {
         console.warn("추가 추천 의도 LLM 분류 실패, 기본 분류를 사용합니다.");
     }
 
-    return classifyMoreRecommendationFallback(userMessage);
+    return fallbackAnswer;
 }
 
 module.exports = {

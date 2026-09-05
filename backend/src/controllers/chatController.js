@@ -35,6 +35,7 @@ async function greeting(req, res) {
  */
 
 async function chat(req, res) {
+    const requestId = req.requestId || "unknown";
     try {
         const { sessionId, message, location, locale } = req.body;
 
@@ -52,24 +53,36 @@ async function chat(req, res) {
             });
         }
 
+        console.log(`[chat-debug:${requestId}] INPUT`, {
+            sessionId,
+            message: String(message),
+            locale,
+        });
+        console.log(`[chat-debug:${requestId}] TRANSLATE_INPUT_START`);
         const translatedInput = await translateUserInput(message, locale);
+        console.log(`[chat-debug:${requestId}] TRANSLATE_INPUT_DONE`);
+        console.log(`[chat-debug:${requestId}] HANDLE_CHAT_START`);
         const result = await handleChat({
             sessionId,
             userMessage: translatedInput.message,
             selectedLocation: location,
+            requestId,
         });
+        console.log(`[chat-debug:${requestId}] HANDLE_CHAT_DONE step=${result.currentStep}`);
+        console.log(`[chat-debug:${requestId}] TRANSLATE_OUTPUT_START`);
         const localizedResult = await translateChatResult(result, translatedInput.language);
+        console.log(`[chat-debug:${requestId}] TRANSLATE_OUTPUT_DONE`);
 
         return res.json({
             success: true,
             data: localizedResult,
         });
     } catch (error) {
-        console.error("Chat Controller Error:", error.message);
+        console.error(`[chat-debug:${requestId}] ERROR`, error.stack || error.message);
 
         return res.status(500).json({
             success: false,
-            message: "채팅 처리 중 오류가 발생했습니다.",
+            message: `채팅 처리 중 오류가 발생했습니다. (추적 ID: ${requestId})`,
         });
     }
 }

@@ -28,6 +28,15 @@ const {
     resolveRouteOnlyAttractions,
 } = require("./routeOnlyService");
 const { buildKakaoRouteUrls } = require("./kakaoRouteExportService");
+const {
+    getWeatherRecommendationContext,
+    buildWeatherReply,
+} = require("./weatherRecommendationService");
+const {
+    getAirQuality,
+    buildAirQualityReply,
+} = require("./airQualityService");
+const { createTravelStory } = require("./travelStoryService");
 
 const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants");
 
@@ -50,7 +59,11 @@ const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants"
  * ==========================================================
  */
 
-async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
+async function handleChat({ sessionId, userMessage, selectedLocation = null, requestId = "unknown" }) {
+
+    const debug = (stage, detail = "") => {
+        console.log(`[chat-debug:${requestId}] ${stage}${detail ? ` ${detail}` : ""}`);
+    };
 
     const session =
         await sessionService.loadSession(sessionId);
@@ -74,7 +87,57 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
         ));
     }
 
+    async function recommendWithSituationContext(recommendationFacts, recommendationRound) {
+        const [weatherContext, airQualityContext] = await Promise.all([
+            getWeatherRecommendationContext({
+                region: recommendationFacts.region,
+                startDate: recommendationFacts.start_date,
+                endDate: recommendationFacts.end_date,
+            }),
+            getAirQuality(recommendationFacts.region),
+        ]);
+        const indoorRecommended = weatherContext.indoorRecommended
+            || airQualityContext.indoorRecommended;
+        const recommendationArgs = {
+            region: recommendationFacts.region,
+            themes: recommendationFacts.themes,
+            tripType: recommendationFacts.trip_type,
+            recommendationRound,
+            recommendedHistory: recommendationFacts.recommended_history,
+            origin: recommendationFacts.start_location,
+        };
+        let result = await recommendAttractions({
+            ...recommendationArgs,
+            indoorOutdoor: indoorRecommended ? "실내" : null,
+        });
+        let usedIndoorFallback = false;
+
+        // 실내 데이터가 부족하면 추천을 중단하지 않고 일반 후보로 보충한다.
+        if (result.exhausted && indoorRecommended) {
+            result = await recommendAttractions(recommendationArgs);
+            usedIndoorFallback = true;
+        }
+
+        return {
+            ...result,
+            situationSummary:
+                `${buildWeatherReply(weatherContext)}\n${buildAirQualityReply(airQualityContext)}\n`
+                + (indoorRecommended && !usedIndoorFallback
+                    ? "상황인지 판단에 따라 실내 관광지만 우선 추천했습니다."
+                    : indoorRecommended && usedIndoorFallback
+                        ? "실내 관광지가 부족해 일반 관광지까지 함께 추천했습니다."
+                        : "야외 활동에 큰 제약이 없어 테마와 인기도를 중심으로 추천했습니다."),
+            reply: `${buildWeatherReply(weatherContext)}\n${buildAirQualityReply(airQualityContext)}\n\n${result.reply}`,
+            weatherContext,
+            airQualityContext,
+            weatherFilter: indoorRecommended && !usedIndoorFallback
+                ? "실내"
+                : null,
+        };
+    }
+
     async function finalizeRoute(routeFacts) {
+        debug("FINAL_ROUTE_START", `places=${routeFacts.selected_places?.length || 0}`);
         const routeResult = await planDailyRoutes({
             startDate: routeFacts.start_date,
             endDate: routeFacts.end_date,
@@ -82,10 +145,18 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
             origin: routeFacts.start_location,
             selectedPlaces: routeFacts.selected_places,
         });
+        debug("FINAL_ROUTE_OPTIMIZED", `days=${routeResult.dailyRoutes.length}`);
+        debug("FINAL_STORY_START");
+        const story = await createTravelStory({
+            facts: routeFacts,
+            dailyRoutes: routeResult.dailyRoutes,
+        });
+        debug("FINAL_STORY_DONE", `length=${story?.length || 0}`);
         const finalFacts = {
             ...routeFacts,
             final_selected_places: routeFacts.selected_places,
             final_route: routeResult.dailyRoutes,
+            final_story: story,
         };
 
         await sessionService.saveConversationState({
@@ -95,10 +166,11 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
             routeNumber: ROUTE_NUMBER.END,
             lastQuestionField: null,
         });
+        debug("FINAL_SESSION_SAVED");
 
         return {
             reply:
-                `${routeResult.reply}\n\n`
+                `${story ? `${story}\n\n정확한 이동 동선\n\n` : ""}${routeResult.reply}\n\n`
                 + "아래 카카오맵 길찾기 링크로 동선을 확인할 수 있습니다.",
             currentStep: CURRENT_STEP.ROUTE_OPTIMIZED,
             facts: finalFacts,
@@ -113,11 +185,16 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
             travelDays,
             origin: routeFacts.start_location,
         });
+        const story = await createTravelStory({
+            facts: routeFacts,
+            dailyRoutes: routeResult.dailyRoutes,
+        });
         const finalFacts = {
             ...routeFacts,
             travel_days: travelDays,
             final_selected_places: routeFacts.selected_places,
             final_route: routeResult.dailyRoutes,
+            final_story: story,
         };
 
         await sessionService.saveConversationState({
@@ -129,7 +206,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
         });
 
         return {
-            reply: `${routeResult.reply}\n\n아래 카카오맵 길찾기 링크로 동선을 확인할 수 있습니다.`,
+            reply: `${story ? `${story}\n\n정확한 이동 동선\n\n` : ""}${routeResult.reply}\n\n아래 카카오맵 길찾기 링크로 동선을 확인할 수 있습니다.`,
             currentStep: CURRENT_STEP.ROUTE_OPTIMIZED,
             facts: finalFacts,
             finalRoute: routeResult.dailyRoutes,
@@ -377,7 +454,9 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
      */
 
     if (session.currentStep === CURRENT_STEP.ASK_MORE_RECOMMENDATION) {
+        debug("MORE_RECOMMENDATION_INPUT", message);
         const answer = await classifyMoreRecommendationAnswer(message);
+        debug("MORE_RECOMMENDATION_CLASSIFIED", answer);
 
         if (answer === "undo") {
             const recordedIds = facts.last_selected_place_ids || [];
@@ -429,19 +508,15 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
         }
 
         const nextRound = (facts.recommendation_round || 1) + 1;
-        const recommendationResult = await recommendAttractions({
-            region: facts.region,
-            themes: facts.themes,
-            tripType: facts.trip_type,
-            recommendationRound: nextRound,
-            recommendedHistory: facts.recommended_history,
-            origin: facts.start_location,
-        });
+        const recommendationResult = await recommendWithSituationContext(facts, nextRound);
         const recommendationFacts = {
             ...facts,
             related_places: recommendationResult.recommendations,
             recommended_history: recommendationResult.recommendedHistory,
             recommendation_round: nextRound,
+            weather_forecasts: recommendationResult.weatherContext.forecasts,
+            weather_filter: recommendationResult.weatherFilter,
+            air_quality: recommendationResult.airQualityContext,
         };
         const nextStep = recommendationResult.exhausted
             ? CURRENT_STEP.READY_FOR_ROUTE_PLANNING
@@ -472,6 +547,8 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
             recommendations: recommendationResult.recommendations,
             hasMore: recommendationResult.hasMore,
             exhausted: recommendationResult.exhausted,
+            situationSummary: recommendationResult.situationSummary,
+            situationFilterApplied: Boolean(recommendationResult.weatherFilter),
         };
     }
 
@@ -582,17 +659,10 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
             result.current_step === CURRENT_STEP.READY_FOR_RECOMMENDATION &&
             result.facts.companion_type
         ) {
-            const recommendationResult =
-                await recommendAttractions({
-                    region: result.facts.region,
-                    themes: result.facts.themes,
-                    tripType: result.facts.trip_type,
-                    recommendationRound:
-                        result.facts.recommendation_round,
-                    recommendedHistory:
-                        result.facts.recommended_history,
-                    origin: result.facts.start_location,
-                });
+            const recommendationResult = await recommendWithSituationContext(
+                result.facts,
+                result.facts.recommendation_round,
+            );
 
             const recommendationFacts = {
                 ...result.facts,
@@ -602,6 +672,12 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
                     recommendationResult.recommendedHistory,
                 recommendation_round:
                     recommendationResult.recommendationRound,
+                weather_forecasts:
+                    recommendationResult.weatherContext.forecasts,
+                weather_filter:
+                    recommendationResult.weatherFilter,
+                air_quality:
+                    recommendationResult.airQualityContext,
             };
 
             await sessionService.saveConversationState({
@@ -620,6 +696,8 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null }) {
                     recommendationResult.recommendations,
                 hasMore: recommendationResult.hasMore,
                 exhausted: recommendationResult.exhausted,
+                situationSummary: recommendationResult.situationSummary,
+                situationFilterApplied: Boolean(recommendationResult.weatherFilter),
                 nextRecommendationRound:
                     recommendationResult.nextRecommendationRound,
             };

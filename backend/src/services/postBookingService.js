@@ -139,11 +139,20 @@ ${JSON.stringify(facts, null, 2)}
 ${text}
 `;
 
-    const llmResult =
-        await callLLMJson(
-            postBookingPrompt,
-            userPrompt
-        );
+    let llmResult = null;
+
+    // 명시적인 온톨로지 표현이면 결과가 결정적이므로 LLM 호출이 필요 없다.
+    // 온톨로지에서 찾지 못한 자연어만 LLM이 보조하며, 실패해도 질문 단계로 복구한다.
+    if (!ontologyCompanion) {
+        try {
+            llmResult = await callLLMJson(
+                postBookingPrompt,
+                userPrompt
+            );
+        } catch (error) {
+            console.warn("동행자 LLM 분류 실패, 동행자 입력을 다시 요청합니다.");
+        }
+    }
 
     const llmFacts =
         llmResult?.facts || {};
@@ -193,9 +202,7 @@ ${text}
         last_question_field:
             step.last_question_field,
 
-        reply:
-            llmResult?.reply ||
-            step.reply,
+        reply: step.reply,
 
     };
 }

@@ -132,13 +132,17 @@ function App() {
     setSuggestions([])
     setIsSending(true)
 
+    const requestId = crypto.randomUUID()
+    console.info(`[chat-debug:${requestId}] sending`, { currentStep, message })
+
     try {
       const response = await fetch(`${API_BASE_URL}/api/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
         body: JSON.stringify({ sessionId, message, location: selectedLocation, locale: browserLocale }),
       })
       const body = await response.json()
+      console.info(`[chat-debug:${requestId}] response`, { status: response.status, body })
       if (!response.ok || !body.success) {
         throw new Error(body.message || '응답을 불러오지 못했습니다.')
       }
@@ -150,16 +154,26 @@ function App() {
       setMessages((current) => [...current, {
         id: crypto.randomUUID(), sender: 'bot',
         text: result.recommendations?.length
-          ? '추천 관광지를 클릭해서 선택해주세요. 여러 곳을 선택할 수 있습니다.'
+          ? `${result.situationSummary || '현재 여행 상황을 반영해 관광지를 추천했습니다.'}\n\n추천 관광지를 클릭해서 선택해주세요. 여러 곳을 선택할 수 있습니다.`
           : result.reply,
         kakaoRouteLinks: result.kakaoRouteLinks || null,
         quickReplies: result.quickReplies || null,
         recommendations: result.recommendations || null,
+        situationFilterApplied: result.situationFilterApplied || false,
       }])
     } catch (error) {
+      console.error(`[chat-debug:${requestId}] failed`, {
+        name: error.name,
+        message: error.message,
+        apiBaseUrl: API_BASE_URL,
+        online: navigator.onLine,
+      })
+      const message = error instanceof TypeError && error.message === 'Failed to fetch'
+        ? `서버 연결이 처리 중 끊겼습니다. 추적 ID: ${requestId}`
+        : error.message
       setMessages((current) => [...current, {
         id: crypto.randomUUID(), sender: 'bot',
-        text: `오류가 발생했습니다. ${error.message}`, isError: true,
+        text: `오류가 발생했습니다. ${message}`, isError: true,
       }])
     } finally {
       setIsSending(false)
@@ -270,6 +284,7 @@ function App() {
                           <span className="recommendation-content">
                             <strong>{selected ? '# ' : ''}{recommendation.name}</strong>
                             <small>{isDistance ? '거리순' : '인기순'} {rank}위</small>
+                            {message.situationFilterApplied && <small>날씨·대기질 맞춤 실내 추천</small>}
                             {recommendation.description && <span className="recommendation-description">{recommendation.description}</span>}
                             <span>{recommendation.theme} · {recommendation.address}</span>
                             {recommendation.roadDistanceKm != null && <small>숙소에서 {recommendation.roadDistanceKm}km</small>}

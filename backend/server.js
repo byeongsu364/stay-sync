@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const crypto = require("crypto");
 
 const env = require("./src/config/env");
 const { connectDB } = require("./src/config/db");
@@ -15,6 +16,23 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use((req, res, next) => {
+    const requestId = req.get("x-request-id") || crypto.randomUUID();
+    const startedAt = Date.now();
+    req.requestId = requestId;
+    res.set("x-request-id", requestId);
+    console.log(`[chat-debug:${requestId}] START ${req.method} ${req.originalUrl}`);
+    res.on("finish", () => {
+        console.log(`[chat-debug:${requestId}] FINISH ${res.statusCode} ${Date.now() - startedAt}ms`);
+    });
+    res.on("close", () => {
+        if (!res.writableFinished) {
+            console.warn(`[chat-debug:${requestId}] CLIENT_CONNECTION_CLOSED ${Date.now() - startedAt}ms`);
+        }
+    });
+    next();
+});
 
 app.get("/", (req, res) => {
     res.json({

@@ -54,7 +54,20 @@ function detectCorrectionTarget(text) {
  * "부모님이랑" → 부모님
  */
 function normalizeCompanionType(text) {
-    for (const [companionType, keywords] of Object.entries(companionOntology)) {
+    // 한 문장에 여러 관계가 등장하면 여행 제약이 더 구체적인 유형을 우선한다.
+    // 예: "와이프랑 애들이랑"은 가족보다 아이동반을 우선한다.
+    const companionPriority = [
+        "아이동반",
+        "부모님",
+        "가족",
+        "연인",
+        "친구",
+        "단체",
+        "혼자",
+    ];
+
+    for (const companionType of companionPriority) {
+        const keywords = companionOntology[companionType] || [];
         if (includesKeyword(text, keywords)) {
             return companionType;
         }

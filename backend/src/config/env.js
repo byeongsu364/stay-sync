@@ -20,7 +20,7 @@ module.exports = {
     },
 
     airQuality: {
-        token: process.env.WAQI_TOKEN,
+        serviceKey: process.env.AIRKOREA_SERVICE_KEY,
     },
 
     routeServer: {

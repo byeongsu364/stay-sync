@@ -35,7 +35,7 @@ const OLLAMA_URL = `http://${env.llm.host}:${env.llm.port}/api/chat`;
  * @param {string} userPrompt
  * @returns {Promise<string>}
  */
-async function callLLM(systemPrompt, userPrompt) {
+async function callLLM(systemPrompt, userPrompt, options = {}) {
     try {
         const response = await axios.post(OLLAMA_URL, {
             model: env.llm.model,
@@ -51,7 +51,7 @@ async function callLLM(systemPrompt, userPrompt) {
                 },
             ],
         }, {
-            timeout: 30000,
+            timeout: options.timeout ?? 30000,
         });
 
         return response.data?.message?.content || "";

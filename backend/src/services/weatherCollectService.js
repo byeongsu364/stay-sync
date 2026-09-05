@@ -1,6 +1,7 @@
 const axios = require("axios");
 const env = require("../config/env");
 const { saveForecast } = require("../repositories/weatherForecastRepository");
+const { SHORT_FORECAST_GRID } = require("../data/weatherRegionData");
 
 /**
  * ==========================================================
@@ -26,27 +27,42 @@ const MID_REGION_MAP = {
     가평: "11B20404",
     연천: "11B20402",
 };
+const MID_LAND_REGION_ID = "11B00000";
 
-const SHORT_GRID_MAP = {
-    고양: { nx: 57, ny: 128 },
-    파주: { nx: 56, ny: 131 },
-    의정부: { nx: 61, ny: 130 },
-    양주: { nx: 61, ny: 131 },
-    동두천: { nx: 61, ny: 134 },
-    포천: { nx: 64, ny: 134 },
-    남양주: { nx: 64, ny: 128 },
-    구리: { nx: 62, ny: 127 },
-    가평: { nx: 69, ny: 133 },
-    연천: { nx: 61, ny: 138 },
-};
+function normalizeServiceKey(serviceKey) {
+    const key = String(serviceKey || "").trim();
+    if (!key.includes("%")) return key;
+    try {
+        return decodeURIComponent(key);
+    } catch (error) {
+        return key;
+    }
+}
 
 function formatDate(date) {
-    return date.toISOString().slice(0, 10);
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    });
+    return formatter.format(date);
 }
 
 function getShortBaseTime() {
-    const now = new Date();
-    const hh = now.getHours();
+    // 발표 직후 API 반영 지연을 피하기 위해 20분 전을 기준으로 사용한다.
+    const now = new Date(Date.now() - 20 * 60 * 1000);
+    const dateFormatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        hourCycle: "h23",
+    });
+    let parts = dateFormatter.formatToParts(now);
+    const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    const hh = Number(values.hour);
 
     const times = [23, 20, 17, 14, 11, 8, 5, 2];
 
@@ -60,40 +76,50 @@ function getShortBaseTime() {
     }
 
     if (hh < 2) {
-        now.setDate(now.getDate() - 1);
+        parts = dateFormatter.formatToParts(new Date(now.getTime() - 24 * 60 * 60 * 1000));
     }
-
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
+    const baseDateValues = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
 
     return {
-        base_date: `${yyyy}${mm}${dd}`,
+        base_date: `${baseDateValues.year}${baseDateValues.month}${baseDateValues.day}`,
         base_time: `${String(baseHour).padStart(2, "0")}00`,
     };
 }
 
 function getMidTmFc() {
-    const now = new Date();
-
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, "0");
-    const dd = String(now.getDate()).padStart(2, "0");
-
-    const time = now.getHours() >= 18 ? "1800" : "0600";
-
-    return `${yyyy}${mm}${dd}${time}`;
+    const now = new Date(Date.now() - 30 * 60 * 1000);
+    const formatter = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Seoul",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        hourCycle: "h23",
+    });
+    let parts = formatter.formatToParts(now);
+    let values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+    let time = "0600";
+    if (Number(values.hour) >= 18) {
+        time = "1800";
+    } else if (Number(values.hour) < 6) {
+        parts = formatter.formatToParts(new Date(now.getTime() - 24 * 60 * 60 * 1000));
+        values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+        time = "1800";
+    }
+    return `${values.year}${values.month}${values.day}${time}`;
 }
 
-async function collectShortForecast() {
+async function collectShortForecast(targetRegion = null) {
     const { base_date, base_time } = getShortBaseTime();
+    const entries = Object.entries(SHORT_FORECAST_GRID)
+        .filter(([region]) => !targetRegion || region === targetRegion);
 
-    for (const [region, grid] of Object.entries(SHORT_GRID_MAP)) {
+    for (const [region, grid] of entries) {
         const response = await axios.get(
             "https://apis.data.go.kr/1360000/VilageFcstInfoService_2.0/getVilageFcst",
             {
                 params: {
-                    serviceKey: env.weather.serviceKey,
+                    serviceKey: normalizeServiceKey(env.weather.serviceKey),
                     pageNo: 1,
                     numOfRows: 1000,
                     dataType: "JSON",
@@ -148,7 +174,7 @@ async function collectShortForecast() {
             }
         }
 
-        const rows = Object.entries(daily).slice(1, 4);
+        const rows = Object.entries(daily).slice(0, 5);
 
         for (const [date, d] of rows) {
             const minTemp = d.minTemp ?? d.tmpMin;
@@ -169,29 +195,31 @@ async function collectShortForecast() {
     }
 }
 
-async function collectMidForecast() {
+async function collectMidForecast(targetRegion = null) {
     const tmFc = getMidTmFc();
+    const rainResponse = await axios.get(
+        "https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst",
+        {
+            params: {
+                serviceKey: normalizeServiceKey(env.weather.serviceKey),
+                pageNo: 1,
+                numOfRows: 10,
+                dataType: "JSON",
+                regId: MID_LAND_REGION_ID,
+                tmFc,
+            },
+        }
+    );
+    const rain = rainResponse.data?.response?.body?.items?.item?.[0];
+    const entries = Object.entries(MID_REGION_MAP)
+        .filter(([region]) => !targetRegion || region === targetRegion);
 
-    for (const [region, regId] of Object.entries(MID_REGION_MAP)) {
+    for (const [region, regId] of entries) {
         const tempResponse = await axios.get(
             "https://apis.data.go.kr/1360000/MidFcstInfoService/getMidTa",
             {
                 params: {
-                    serviceKey: env.weather.serviceKey,
-                    pageNo: 1,
-                    numOfRows: 10,
-                    dataType: "JSON",
-                    regId,
-                    tmFc,
-                },
-            }
-        );
-
-        const rainResponse = await axios.get(
-            "https://apis.data.go.kr/1360000/MidFcstInfoService/getMidLandFcst",
-            {
-                params: {
-                    serviceKey: env.weather.serviceKey,
+                    serviceKey: normalizeServiceKey(env.weather.serviceKey),
                     pageNo: 1,
                     numOfRows: 10,
                     dataType: "JSON",
@@ -202,7 +230,6 @@ async function collectMidForecast() {
         );
 
         const temp = tempResponse.data?.response?.body?.items?.item?.[0];
-        const rain = rainResponse.data?.response?.body?.items?.item?.[0];
 
         if (!temp || !rain) continue;
 

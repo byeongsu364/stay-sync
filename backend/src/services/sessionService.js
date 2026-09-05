@@ -86,6 +86,13 @@ function buildFactsFromSession(session) {
         travel_days: session.facts?.travel_days ?? null,
         final_selected_places: session.finalSelectedPlaces ?? [],
         final_route: session.finalRoute ?? null,
+        final_story: session.facts?.final_story ?? null,
+        weather_forecasts:
+            Array.isArray(session.facts?.weather_forecasts)
+                ? session.facts.weather_forecasts
+                : [],
+        weather_filter: session.facts?.weather_filter ?? null,
+        air_quality: session.facts?.air_quality ?? null,
     };
 }
 
