@@ -1,4 +1,5 @@
 const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants");
+const { decidePostBookingStep } = require("./postBookingService");
 const {
     searchLocation: searchKakaoLocation,
 } = require("./kakaoLocationService");
@@ -147,25 +148,7 @@ async function handleLocationInput({
             };
         }
 
-        return {
-            handled: true,
-
-            facts,
-
-            route_number:
-                ROUTE_NUMBER.POST_BOOKING,
-
-            current_step:
-                CURRENT_STEP.ASK_COMPANION_TYPE,
-
-            last_question_field:
-                "companion_type",
-
-            reply:
-                "숙소를 확인했습니다.\n\n" +
-                "누구와 함께 여행하시나요?\n" +
-                "(혼자, 연인, 친구, 가족, 부모님, 아이동반)",
-        };
+        return { handled: true, facts, ...decidePostBookingStep(facts) };
     }
 
     /**
@@ -231,25 +214,7 @@ async function handleLocationInput({
             };
         }
 
-        return {
-            handled: true,
-
-            facts,
-
-            route_number:
-                ROUTE_NUMBER.POST_BOOKING,
-
-            current_step:
-                CURRENT_STEP.ASK_COMPANION_TYPE,
-
-            last_question_field:
-                "companion_type",
-
-            reply:
-                "출발지를 확인했습니다.\n\n" +
-                "누구와 함께 여행하시나요?\n" +
-                "(혼자, 연인, 친구, 가족, 부모님, 아이동반)",
-        };
+        return { handled: true, facts, ...decidePostBookingStep(facts) };
     }
 
     return {

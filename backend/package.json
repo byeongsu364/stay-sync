@@ -10,8 +10,8 @@
     "data:import": "node scripts/importAttractionData.js",
     "data:replace": "node scripts/importAttractionData.js --replace",
     "data:classify-environment": "node scripts/classifyAttractionEnvironment.js --apply",
-    "route:start": "cd route-server && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000",
-    "route:dev": "cd route-server && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8000 --reload"
+    "route:start": "cd route-server && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8001",
+    "route:dev": "cd route-server && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8001 --reload"
   },
   "keywords": [],
   "author": "",

@@ -1,0 +1,6 @@
+{
+  "watch": ["server.js", "src", "nodemon.json"],
+  "ext": "js,mjs,cjs,json",
+  "ignore": ["route-server/**", "cache/**", "logs/**", "tests/**", "**/*.log"],
+  "signal": "SIGTERM"
+}

@@ -3,9 +3,34 @@ const { callLLMJson } = require("./llmService");
 const {
     normalizeCompanionType,
     mapCompanionToThemes,
+    mergeThemes,
 } = require("./ontologyService");
 
 const { CURRENT_STEP, ROUTE_NUMBER } = require("../data/constants");
+const companionOntology = require("../ontology/companionOntology");
+
+// 목적지/기간을 말할 때 함께 제공한 명시적인 동행자 정보도 수집한다.
+// 장소 이름 속의 '가족', '형' 등을 동행자로 읽지 않도록 관계 표현을 확인한다.
+function captureCompanionFacts(userMessage, facts = {}) {
+    const text = String(userMessage || "").normalize("NFC");
+    if (/말고|아니|않|취소/.test(text)) return facts;
+    const compact = text.replace(/\s/g, "");
+    const expressions = Object.values(companionOntology).flat().filter((keyword) => {
+        if (compact === keyword.replace(/\s/g, "")) return true;
+        const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const ending = keyword.startsWith("혼자") || keyword === "혼행" || keyword === "나홀로"
+            ? "(?=$|[^가-힣a-z0-9])"
+            : "(?:들)?(?:이랑|랑|하고|와|과|동반|\\s+함께|\\s+여행)";
+        return new RegExp(`(?:^|[^가-힣a-z0-9])${escaped}${ending}`, "i").test(text);
+    });
+    const companionType = normalizeCompanionType(expressions.join(" "));
+    if (!companionType) return facts;
+    return {
+        ...facts,
+        companion_type: companionType,
+        themes: mergeThemes(facts.interest_themes || [], mapCompanionToThemes(companionType)),
+    };
+}
 
 /**
  * ==========================================================
@@ -175,8 +200,9 @@ ${text}
 
                 themes:
                     companionType
-                        ? mapCompanionToThemes(
-                            companionType
+                        ? mergeThemes(
+                            facts.interest_themes || [],
+                            mapCompanionToThemes(companionType),
                         )
                         : facts.themes,
 
@@ -208,6 +234,8 @@ ${text}
 }
 
 module.exports = {
+
+    captureCompanionFacts,
 
     mergePostBookingFacts,
 

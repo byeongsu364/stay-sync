@@ -24,7 +24,7 @@ module.exports = {
     },
 
     routeServer: {
-        url: process.env.ROUTE_SERVER_URL || "http://127.0.0.1:8000",
+        url: process.env.ROUTE_SERVER_URL || "http://127.0.0.1:8001",
         autoStart: process.env.ROUTE_SERVER_AUTO_START !== "false",
     },
 

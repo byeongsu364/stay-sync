@@ -169,7 +169,7 @@ function App() {
         online: navigator.onLine,
       })
       const message = error instanceof TypeError && error.message === 'Failed to fetch'
-        ? `서버 연결이 처리 중 끊겼습니다. 추적 ID: ${requestId}`
+        ? `응답을 받는 도중 연결이 끊겼습니다. 잠시 후 다시 시도해주세요. 추적 ID: ${requestId}`
         : error.message
       setMessages((current) => [...current, {
         id: crypto.randomUUID(), sender: 'bot',

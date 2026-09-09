@@ -32,6 +32,25 @@ const ALLOWED_INTENTS = [
 ];
 
 async function classifyIntent({ userMessage, currentStep, facts }) {
+    const normalized = String(userMessage || "").replace(/\s/g, "");
+    const correctionKeywords = ["잘못", "수정", "변경", "취소", "이전", "아니고"];
+    const structuredInputSteps = new Set([
+        "ASK_REGION",
+        "ASK_ATTRACTION_REGION",
+        "ASK_PERIOD",
+        "ASK_START_LOCATION",
+        "ASK_ACCOMMODATION",
+        "ASK_COMPANION_TYPE",
+    ]);
+
+    // 정해진 정보를 수집하는 단계의 일반 입력은 LLM 장애와 지연의 영향을 받지 않는다.
+    if (
+        structuredInputSteps.has(currentStep)
+        && !correctionKeywords.some((keyword) => normalized.includes(keyword))
+    ) {
+        return { intent: "normal" };
+    }
+
     const userPrompt = `
 현재 단계:
 ${currentStep || ""}
@@ -43,7 +62,13 @@ ${JSON.stringify(facts || {}, null, 2)}
 ${userMessage}
 `;
 
-    const result = await callLLMJson(intentPrompt, userPrompt);
+    let result;
+    try {
+        result = await callLLMJson(intentPrompt, userPrompt);
+    } catch (error) {
+        console.warn(`[Intent] LLM 분류 실패, normal로 처리합니다: ${error.message}`);
+        return { intent: "normal" };
+    }
 
     const intent = result?.intent;
 

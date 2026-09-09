@@ -51,7 +51,7 @@ async function ensureRouteServer() {
 
     routeServerProcess = spawn(
         uvicornPath,
-        ["app:app", "--host", routeUrl.hostname, "--port", routeUrl.port || "8000"],
+        ["app:app", "--host", routeUrl.hostname, "--port", routeUrl.port || "8001"],
         {
             cwd: routeServerDirectory,
             stdio: "inherit",

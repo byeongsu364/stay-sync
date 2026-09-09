@@ -69,14 +69,27 @@ async function findAttractionsByName({ region, name, limit = 10 }) {
     });
 }
 
-async function searchAttractionsByName({ name, limit = 8 }) {
+async function searchAttractionsByName({ name, limit = 8, mentionedInText = false }) {
     const normalizedName = normalizeName(name);
     const pagination = normalizePagination(0, limit);
     if (!normalizedName) return [];
 
+    // 문장 전체가 제목에 포함되는지 대신, DB 제목이 문장에 포함되는지 조회한다.
+    // 사용자 입력은 Prisma의 바인딩 값으로만 전달한다.
+    const mentioned = mentionedInText
+        ? await prisma.$queryRaw`
+            SELECT id FROM "Attraction"
+            WHERE "normalizedTitle" <> ''
+              AND POSITION("normalizedTitle" IN ${normalizedName}) > 0
+              AND mapx IS NOT NULL AND mapy IS NOT NULL
+        `
+        : null;
+
     return await prisma.attraction.findMany({
         where: {
-            normalizedTitle: { contains: normalizedName },
+            ...(mentioned
+                ? { id: { in: mentioned.map(({ id }) => id) } }
+                : { normalizedTitle: { contains: normalizedName } }),
             mapx: { not: null },
             mapy: { not: null },
         },
@@ -88,13 +101,33 @@ async function searchAttractionsByName({ name, limit = 8 }) {
             address2: true,
             mapx: true,
             mapy: true,
+            searchStats: {
+                select: {
+                    middleCategory: true,
+                    smallCategory: true,
+                    yearMonth: true,
+                },
+                orderBy: [
+                    { yearMonth: "desc" },
+                    { rank: "asc" },
+                ],
+                take: 1,
+            },
         },
         orderBy: [
             { normalizedTitle: "asc" },
             { id: "asc" },
         ],
-        take: pagination.limit,
-    });
+        ...(mentioned ? {} : { take: pagination.limit }),
+    }).then((attractions) => attractions.map((attraction) => {
+        const latestStat = attraction.searchStats[0] || null;
+        return {
+            ...attraction,
+            searchStats: undefined,
+            theme: latestStat?.middleCategory || null,
+            category: latestStat?.smallCategory || null,
+        };
+    }));
 }
 
 async function findPopularAttractions({

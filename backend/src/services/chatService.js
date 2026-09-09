@@ -1,8 +1,16 @@
 const sessionService = require("./sessionService");
 const { classifyIntent } = require("./intentService");
 const { handleCorrection } = require("./correctionService");
-const { extractTravelIntent } = require("./travelIntentService");
-const { collectPostBookingFacts } = require("./postBookingService");
+const {
+    extractTravelIntent,
+    parseSimplePeriod,
+    mergeTravelFacts,
+    applyTripType,
+    decideTravelIntentStep,
+    captureUndatedTripType,
+    buildPeriodQuestion,
+} = require("./travelIntentService");
+const { collectPostBookingFacts, captureCompanionFacts } = require("./postBookingService");
 const { handleLocationInput } = require("./locationInputService");
 const { handleAccommodationStep } = require("./accommodationService");
 const {
@@ -71,11 +79,73 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
     /**
      * 항상 DB 컬럼 기준으로 facts 생성
      */
-    const facts =
+    let facts =
         sessionService.buildFactsFromSession(session);
 
     const message =
         String(userMessage).trim();
+
+    if ([CURRENT_STEP.ASK_SERVICE_TYPE, CURRENT_STEP.ASK_REGION,
+        CURRENT_STEP.ASK_ATTRACTION_REGION, CURRENT_STEP.ASK_PERIOD].includes(session.currentStep)) {
+        let capturedFacts = captureCompanionFacts(message, facts);
+        capturedFacts = captureUndatedTripType(message, capturedFacts);
+        const period = parseSimplePeriod(message);
+        if (period) {
+            capturedFacts = applyTripType(mergeTravelFacts(capturedFacts, period));
+        }
+        if (capturedFacts !== facts) {
+            facts = capturedFacts;
+            // 목적지가 아직 모호해 다시 질문하더라도 확인된 동행자와 기간은 보존한다.
+            await sessionService.saveConversationState({
+                sessionId, facts, currentStep: session.currentStep,
+                routeNumber: session.routeNumber,
+                lastQuestionField: session.lastQuestionField,
+            });
+        }
+    }
+
+    function destinationPeriodQuestion(destinationFacts) {
+        const destination = destinationFacts.interest_place?.name
+            ? `${destinationFacts.interest_place.name}(${destinationFacts.region})`
+            : destinationFacts.region;
+        const companion = destinationFacts.companion_type
+            ? ` 동행자 유형은 '${destinationFacts.companion_type}'로 저장했어요.` : "";
+        const visit = destinationFacts.interest_place?.visitConfirmed ? " 방문 목록에도 추가했습니다." : "";
+        return `${destination} 여행으로 확인했습니다.${visit}${companion} ${buildPeriodQuestion(destinationFacts)}`;
+    }
+
+    async function advanceFromDestination(destinationFacts) {
+        const nextFacts = applyTripType(destinationFacts);
+        let step = decideTravelIntentStep(nextFacts);
+        if (step.current_step === CURRENT_STEP.READY_FOR_ACCOMMODATION_RECOMMENDATION) {
+            step = handleAccommodationStep(nextFacts);
+        }
+        const questionFields = {
+            [CURRENT_STEP.ASK_PERIOD]: "period",
+            [CURRENT_STEP.ASK_ACCOMMODATION]: "accommodation",
+            [CURRENT_STEP.ASK_START_LOCATION]: "departure_location",
+        };
+        await sessionService.saveConversationState({
+            sessionId,
+            facts: nextFacts,
+            currentStep: step.current_step,
+            routeNumber: step.route_number,
+            lastQuestionField: questionFields[step.current_step] || null,
+        });
+        const details = [
+            nextFacts.interest_place?.name
+                ? `${nextFacts.interest_place.visitConfirmed ? "방문 확정 관광지" : "관심 관광지"}: ${nextFacts.interest_place.name}` : null,
+            nextFacts.companion_type ? `동행자: ${nextFacts.companion_type}` : null,
+            nextFacts.period ? `여행 일정: ${nextFacts.period}` : null,
+        ].filter(Boolean).join(" · ");
+        return {
+            reply: step.current_step === CURRENT_STEP.ASK_PERIOD
+                ? destinationPeriodQuestion(nextFacts)
+                : `${details}\n\n${step.reply}`,
+            currentStep: step.current_step,
+            facts: nextFacts,
+        };
+    }
 
     function getKakaoRouteLinks(dailyRoutes) {
         return dailyRoutes.flatMap((day) => (
@@ -103,7 +173,10 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             themes: recommendationFacts.themes,
             tripType: recommendationFacts.trip_type,
             recommendationRound,
-            recommendedHistory: recommendationFacts.recommended_history,
+            recommendedHistory: [...new Set([
+                ...(recommendationFacts.recommended_history || []),
+                ...(recommendationFacts.selected_places || []).map(({ id }) => id),
+            ])],
             origin: recommendationFacts.start_location,
         };
         let result = await recommendAttractions({
@@ -133,6 +206,39 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             weatherFilter: indoorRecommended && !usedIndoorFallback
                 ? "실내"
                 : null,
+        };
+    }
+
+    async function showInitialRecommendations(readyFacts) {
+        const recommendationResult = await recommendWithSituationContext(
+            readyFacts, readyFacts.recommendation_round,
+        );
+        const recommendationFacts = {
+            ...readyFacts,
+            related_places: recommendationResult.recommendations,
+            recommended_history: recommendationResult.recommendedHistory,
+            recommendation_round: recommendationResult.recommendationRound,
+            weather_forecasts: recommendationResult.weatherContext.forecasts,
+            weather_filter: recommendationResult.weatherFilter,
+            air_quality: recommendationResult.airQualityContext,
+        };
+        await sessionService.saveConversationState({
+            sessionId,
+            facts: recommendationFacts,
+            currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
+            routeNumber: ROUTE_NUMBER.RECOMMENDATION,
+            lastQuestionField: null,
+        });
+        return {
+            reply: recommendationResult.reply,
+            currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
+            facts: recommendationFacts,
+            recommendations: recommendationResult.recommendations,
+            hasMore: recommendationResult.hasMore,
+            exhausted: recommendationResult.exhausted,
+            situationSummary: recommendationResult.situationSummary,
+            situationFilterApplied: Boolean(recommendationResult.weatherFilter),
+            nextRecommendationRound: recommendationResult.nextRecommendationRound,
         };
     }
 
@@ -231,10 +337,14 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
                 service_type: SERVICE_TYPE.ACCOMMODATION,
             });
 
+            if (destinationFacts?.needsDestinationChoice) {
+                return { ...destinationFacts, currentStep: session.currentStep, facts };
+            }
+
             if (!destinationFacts) {
                 return {
                     reply:
-                        "지원하지 않는 여행지입니다. 아래 10개 지역 또는 보유 관광지의 정확한 이름을 입력해주세요.\n\n"
+                        "문장에서 지원하는 여행지를 찾지 못했습니다. 아래 지역이나 보유 관광지명을 포함해 말씀해주세요. 예: 자라섬으로 여행 갈 거야.\n\n"
                         + "고양, 파주, 의정부, 양주, 동두천, 포천, 남양주, 구리, 가평, 연천",
                     currentStep: CURRENT_STEP.ASK_SERVICE_TYPE,
                     facts,
@@ -242,18 +352,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
                 };
             }
 
-            await sessionService.saveConversationState({
-                sessionId,
-                facts: destinationFacts,
-                currentStep: CURRENT_STEP.ASK_PERIOD,
-                routeNumber: ROUTE_NUMBER.TRAVEL_INFO,
-                lastQuestionField: "period",
-            });
-            return {
-                reply: `${destinationFacts.region}으로 여행을 가시는군요. 언제부터 언제까지 여행하시나요?`,
-                currentStep: CURRENT_STEP.ASK_PERIOD,
-                facts: destinationFacts,
-            };
+            return await advanceFromDestination(destinationFacts);
         }
 
         await sessionService.saveConversationState({
@@ -266,7 +365,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
         return selection;
     }
 
-    if (session.currentStep === CURRENT_STEP.ASK_ATTRACTION_REGION) {
+    if ([CURRENT_STEP.ASK_ATTRACTION_REGION, CURRENT_STEP.ASK_REGION].includes(session.currentStep)) {
         let nextFacts;
         try {
             nextFacts = await handleAttractionRegionInput(message, facts);
@@ -277,23 +376,16 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
         if (!nextFacts) {
             return {
                 reply: "지원 지역이나 해당 지역의 관광지를 찾지 못했습니다. 여행 지역 또는 관광지명을 다시 입력해주세요.",
-                currentStep: CURRENT_STEP.ASK_ATTRACTION_REGION,
+                currentStep: session.currentStep,
                 facts,
             };
         }
 
-        await sessionService.saveConversationState({
-            sessionId,
-            facts: nextFacts,
-            currentStep: CURRENT_STEP.ASK_PERIOD,
-            routeNumber: ROUTE_NUMBER.TRAVEL_INFO,
-            lastQuestionField: "period",
-        });
-        return {
-            reply: `${nextFacts.region} 여행으로 확인했습니다. 언제부터 언제까지 여행하시나요?`,
-            currentStep: CURRENT_STEP.ASK_PERIOD,
-            facts: nextFacts,
-        };
+        if (nextFacts.needsDestinationChoice) {
+            return { ...nextFacts, currentStep: session.currentStep, facts };
+        }
+
+        return await advanceFromDestination(nextFacts);
     }
 
     if (session.currentStep === CURRENT_STEP.ASK_ROUTE_ATTRACTIONS) {
@@ -467,7 +559,8 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
                 (recordedIds.length > 0
                     ? recordedIds
                     : facts.selected_places
-                        .filter(({ id }) => currentRecommendationIds.has(String(id)))
+                        .filter(({ id, selectionSource }) => selectionSource !== "destination"
+                            && currentRecommendationIds.has(String(id)))
                         .map(({ id }) => id)
                 ).map(String),
             );
@@ -558,6 +651,10 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
      * ======================================================
      */
 
+    if (session.currentStep === CURRENT_STEP.READY_FOR_RECOMMENDATION) {
+        return await showInitialRecommendations(facts);
+    }
+
     const intentResult = await classifyIntent({
         userMessage: message,
         currentStep: session.currentStep,
@@ -624,6 +721,17 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             );
         }
 
+        if (locationResult.current_step === CURRENT_STEP.READY_FOR_RECOMMENDATION) {
+            // 추천 API가 실패해도 입력받은 위치는 보존한다. 재시도 시 위치를 다시 묻지 않는다.
+            await sessionService.saveConversationState({
+                sessionId, facts: locationResult.facts,
+                currentStep: CURRENT_STEP.READY_FOR_RECOMMENDATION,
+                routeNumber: ROUTE_NUMBER.RECOMMENDATION,
+                lastQuestionField: null,
+            });
+            return await showInitialRecommendations(locationResult.facts);
+        }
+
         await sessionService.saveConversationState({
             sessionId,
             facts: locationResult.facts,
@@ -659,48 +767,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             result.current_step === CURRENT_STEP.READY_FOR_RECOMMENDATION &&
             result.facts.companion_type
         ) {
-            const recommendationResult = await recommendWithSituationContext(
-                result.facts,
-                result.facts.recommendation_round,
-            );
-
-            const recommendationFacts = {
-                ...result.facts,
-                related_places:
-                    recommendationResult.recommendations,
-                recommended_history:
-                    recommendationResult.recommendedHistory,
-                recommendation_round:
-                    recommendationResult.recommendationRound,
-                weather_forecasts:
-                    recommendationResult.weatherContext.forecasts,
-                weather_filter:
-                    recommendationResult.weatherFilter,
-                air_quality:
-                    recommendationResult.airQualityContext,
-            };
-
-            await sessionService.saveConversationState({
-                sessionId,
-                facts: recommendationFacts,
-                currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
-                routeNumber: ROUTE_NUMBER.RECOMMENDATION,
-                lastQuestionField: null,
-            });
-
-            return {
-                reply: recommendationResult.reply,
-                currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
-                facts: recommendationFacts,
-                recommendations:
-                    recommendationResult.recommendations,
-                hasMore: recommendationResult.hasMore,
-                exhausted: recommendationResult.exhausted,
-                situationSummary: recommendationResult.situationSummary,
-                situationFilterApplied: Boolean(recommendationResult.weatherFilter),
-                nextRecommendationRound:
-                    recommendationResult.nextRecommendationRound,
-            };
+            return await showInitialRecommendations(result.facts);
         }
 
     }

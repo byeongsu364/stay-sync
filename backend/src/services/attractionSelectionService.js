@@ -10,7 +10,8 @@ function mergeSelectedPlaces(previousSelections = [], newSelections = []) {
 
     for (const place of [...previousSelections, ...newSelections]) {
         if (place?.id !== undefined && place?.id !== null) {
-            selectedById.set(place.id, place);
+            const id = String(place.id);
+            selectedById.set(id, { ...selectedById.get(id), ...place });
         }
     }
 
@@ -50,7 +51,7 @@ function selectAttractions({ userMessage, recommendations = [], selectedPlaces =
     return {
         handled: true,
         selectedPlaces: mergedSelections,
-        newSelections: selections,
+        newSelections: selections.filter(({ id }) => !selectedPlaces.some((place) => String(place.id) === String(id))),
         reply:
             `${selectedNames}을(를) 선택했습니다.\n\n`
             + "관광지를 더 추천받으시겠어요?",

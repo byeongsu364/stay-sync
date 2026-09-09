@@ -24,6 +24,10 @@ function buildFactsFromSession(session) {
     return {
         service_type: session.serviceType ?? null,
         interest_place: session.facts?.interest_place ?? null,
+        interest_themes:
+            Array.isArray(session.facts?.interest_themes)
+                ? session.facts.interest_themes
+                : [],
         region: session.region ?? null,
         period: session.period ?? null,
         start_date: session.startDate
