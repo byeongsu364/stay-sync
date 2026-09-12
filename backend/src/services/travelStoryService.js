@@ -1,5 +1,6 @@
 const finalTravelPlanPrompt = require("../prompts/finalTravelPlanPrompt");
 const { callLLM } = require("./llmService");
+const { hasFinalConsonant, withJosa } = require("../utils/koreanUtils");
 
 function buildStoryInput(facts, dailyRoutes) {
     return {
@@ -33,18 +34,52 @@ function buildStoryInput(facts, dailyRoutes) {
     };
 }
 
+const COMPANION_PHRASES = {
+    혼자: "혼자 떠나기 좋은",
+    연인: "연인과 함께 걷기 좋은",
+    친구: "친구와 함께 즐기기 좋은",
+    가족: "가족이 함께 즐기기 좋은",
+    아이동반: "아이와 함께 다니기 좋은",
+    부모님: "부모님과 함께 다녀오기 좋은",
+    단체: "여럿이 함께 즐기기 좋은",
+};
+
+function buildCompanionPhrase(companionType) {
+    if (!companionType) return null;
+    return (
+        COMPANION_PHRASES[companionType] ||
+        `${withJosa(companionType, "과", "와")} 함께하기 좋은`
+    );
+}
+
+function buildHeadline(region, companionPhrase) {
+    if (region && companionPhrase) return `${region}에서 ${companionPhrase} 여행 코스입니다.`;
+    if (region) return `${region} 여행 코스입니다.`;
+    if (companionPhrase) return `${companionPhrase} 여행 코스입니다.`;
+    return "추천 여행 코스입니다.";
+}
+
+function buildDayStory(day, names) {
+    if (names.length === 1) {
+        return `${day}일차에는 ${names[0]} 한 곳에서 여유롭게 시간을 보냅니다.`;
+    }
+    if (names.length === 2) {
+        return `${day}일차에는 ${withJosa(names[0], "을", "를")} 둘러본 뒤 ${withJosa(names[1], "으로", "로")} 이동합니다.`;
+    }
+    const last = names[names.length - 1];
+    const middle = names.slice(1, -1).join(", ");
+    return `${day}일차에는 ${names[0]}에서 시작해 ${middle}, ${withJosa(last, "을", "를")} 차례로 둘러봅니다.`;
+}
+
 function buildFallbackStory(facts, dailyRoutes) {
-    const companion = facts.companion_type
-        ? `${facts.companion_type} 여행자에게 어울리는`
-        : "여행의 흐름을 살린";
-    const region = facts.region ? `${facts.region}에서 ` : "";
+    const headline = buildHeadline(facts.region || null, buildCompanionPhrase(facts.companion_type));
     const dayStories = dailyRoutes.map((route) => {
         const names = route.stops.map(({ name }) => name).filter(Boolean);
         if (names.length === 0) return null;
-        return `${route.day}일차에는 ${names.join(" → ")} 순서로 둘러보며 각 장소의 매력을 자연스럽게 이어갑니다.`;
+        return buildDayStory(route.day, names);
     }).filter(Boolean);
 
-    return `${region}${companion} 여행입니다.\n\n${dayStories.join("\n")}`.trim();
+    return `${headline}\n\n${dayStories.join("\n")}`.trim();
 }
 
 async function createTravelStory({ facts, dailyRoutes }) {

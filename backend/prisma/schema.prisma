@@ -243,6 +243,16 @@ model Attraction {
 
   title           String
   normalizedTitle String
+
+  /**
+   * 영문 관광지명
+   *
+   * 한국관광공사 영문 서비스(EngService2)에 등록된 관광지만 채워진다.
+   * 한국어 서비스와 contentId 체계가 달라 제목으로 맞춘 값이다.
+   */
+  titleEn           String?
+  normalizedTitleEn String?
+
   region          String
   address1        String
   address2        String?
@@ -284,6 +294,7 @@ model Attraction {
 
   @@index([region])
   @@index([normalizedTitle])
+  @@index([normalizedTitleEn])
   @@index([region, indoorOutdoor])
 }
 

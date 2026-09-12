@@ -22,8 +22,12 @@ async function loadSession(sessionId) {
 
 function buildFactsFromSession(session) {
     return {
+        language: session.language ?? "ko",
         service_type: session.serviceType ?? null,
-        interest_place: session.facts?.interest_place ?? null,
+        interest_places:
+            Array.isArray(session.facts?.interest_places)
+                ? session.facts.interest_places
+                : [],
         interest_themes:
             Array.isArray(session.facts?.interest_themes)
                 ? session.facts.interest_themes
@@ -117,6 +121,7 @@ function buildSessionDataFromFacts({
         lastQuestionField,
         correctionTarget: correctionTarget ?? null,
         rollbackFields: rollbackFields ?? null,
+        language: facts.language ?? "ko",
         serviceType: facts.service_type ?? null,
 
         region: facts.region ?? null,

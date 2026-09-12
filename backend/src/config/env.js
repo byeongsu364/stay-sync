@@ -17,6 +17,13 @@ module.exports = {
         serviceKey:
             process.env.TOUR_API_SERVICE_KEY
             || process.env.KMA_SERVICE_KEY,
+
+        // 영문 서비스(EngService2)는 data.go.kr에서 따로 활용신청해야 열린다.
+        // 보통 같은 인증키가 그대로 쓰이므로 별도 키가 없으면 한국어 키를 쓴다.
+        englishServiceKey:
+            process.env.TOUR_API_ENG_SERVICE_KEY
+            || process.env.TOUR_API_SERVICE_KEY
+            || process.env.KMA_SERVICE_KEY,
     },
 
     airQuality: {

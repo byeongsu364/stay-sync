@@ -8,6 +8,7 @@ const {
 
 const { CURRENT_STEP, ROUTE_NUMBER } = require("../data/constants");
 const companionOntology = require("../ontology/companionOntology");
+const { t } = require("./messageService");
 
 // 목적지/기간을 말할 때 함께 제공한 명시적인 동행자 정보도 수집한다.
 // 장소 이름 속의 '가족', '형' 등을 동행자로 읽지 않도록 관계 표현을 확인한다.
@@ -92,7 +93,7 @@ function decidePostBookingStep(facts) {
                 "companion_type",
 
             reply:
-                "누구와 함께 여행하시나요?\n(혼자, 연인, 친구, 가족, 부모님, 아이동반)",
+                t("companion.ask", {}, facts.language),
         };
     }
 

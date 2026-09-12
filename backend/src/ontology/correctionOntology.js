@@ -25,22 +25,51 @@ module.exports = {
         "포천",
         "연천",
         "의정부",
-        "동두천"
+        "동두천",
+
+        // 영어
+        "region",
+        "area",
+        "city",
+        "destination",
+        "goyang",
+        "paju",
+        "uijeongbu",
+        "yangju",
+        "dongducheon",
+        "pocheon",
+        "namyangju",
+        "guri",
+        "gapyeong",
+        "yeoncheon",
     ],
 
+    // '출발'만 적힌 표현은 출발지와 구분되지 않으므로 날짜를 뜻하는 형태만 둔다.
     period: [
         "기간",
         "날짜",
         "일정",
         "며칠",
-        "출발",
-        "도착",
-        "복귀",
+        "출발일",
+        "출발날짜",
+        "도착일",
+        "복귀일",
+        "돌아오",
         "하루",
         "당일",
         "1박",
         "2박",
-        "3박"
+        "3박",
+
+        // 영어
+        "date",
+        "dates",
+        "schedule",
+        "itinerary",
+        "duration",
+        "how many days",
+        "how long",
+        "nights",
     ],
 
     accommodation: [
@@ -49,15 +78,37 @@ module.exports = {
         "모텔",
         "펜션",
         "리조트",
-        "게스트하우스"
+        "게스트하우스",
+
+        // 영어
+        "hotel",
+        "motel",
+        "pension",
+        "resort",
+        "guesthouse",
+        "accommodation",
+        "lodging",
+        "airbnb",
+        "where i stay",
     ],
 
     departure_location: [
-        "출발",
         "출발지",
+        "출발",
         "집",
         "회사",
-        "학교"
+        "학교",
+
+        // 영어
+        "departure",
+        "starting point",
+        "start location",
+        "start from",
+        "leave from",
+        "my home",
+        "my house",
+        "my office",
+        "my school",
     ],
 
     companion_type: [
@@ -68,6 +119,17 @@ module.exports = {
         "아이",
         "아이동반",
         "부모님",
-        "단체"
+        "단체",
+
+        // 영어
+        "solo",
+        "alone",
+        "friend",
+        "couple",
+        "family",
+        "kid",
+        "children",
+        "parent",
+        "group",
     ]
 };

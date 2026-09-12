@@ -11,7 +11,9 @@
     "data:replace": "node scripts/importAttractionData.js --replace",
     "data:classify-environment": "node scripts/classifyAttractionEnvironment.js --apply",
     "route:start": "cd route-server && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8001",
-    "route:dev": "cd route-server && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8001 --reload"
+    "route:dev": "cd route-server && .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8001 --reload",
+    "data:check-english": "node scripts/checkEnglishTourApi.js",
+    "data:import-english": "node scripts/importEnglishTitles.js"
   },
   "keywords": [],
   "author": "",

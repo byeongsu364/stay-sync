@@ -81,8 +81,50 @@ async function translateChatResult(result, locale) {
     }
 }
 
+/**
+ * 데이터에서 온 글만 번역한다.
+ *
+ * 대화 문구는 messages 카탈로그가 이미 해당 언어로 만들었다.
+ * 남는 것은 관광지 설명처럼 한국어 원본밖에 없는 값이다.
+ * 번역이 실패해도 원문을 그대로 두고 대화는 이어간다.
+ */
+async function translateDataFields(result, locale) {
+    const language = normalizeLanguage(locale);
+    const descriptions = (result?.recommendations || [])
+        .filter(({ description }) => description);
+
+    if (language === "ko" || descriptions.length === 0) {
+        return { ...result, language };
+    }
+
+    try {
+        const translated = await callLLMJson(
+            outputTranslationPrompt,
+            `번역 대상 언어: ${language}\nJSON:\n${JSON.stringify({
+                recommendations: descriptions.map(({ id, description }) => ({ id, description })),
+            })}`,
+        );
+        const byId = new Map(
+            (translated?.recommendations || []).map((item) => [String(item.id), item]),
+        );
+
+        return {
+            ...result,
+            recommendations: result.recommendations.map((item) => ({
+                ...item,
+                description: byId.get(String(item.id))?.description || item.description,
+            })),
+            language,
+        };
+    } catch (error) {
+        console.warn("관광지 설명 번역 실패, 원문을 사용합니다.");
+        return { ...result, language };
+    }
+}
+
 module.exports = {
     normalizeLanguage,
     translateUserInput,
     translateChatResult,
+    translateDataFields,
 };

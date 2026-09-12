@@ -5,6 +5,7 @@ const {
     collectShortForecast,
     collectMidForecast,
 } = require("./weatherCollectService");
+const { t, label } = require("./messageService");
 
 const RAIN_PROBABILITY_THRESHOLD = 60;
 const HEAT_THRESHOLD = 33;
@@ -76,15 +77,24 @@ async function getWeatherRecommendationContext({ region, startDate, endDate }) {
     };
 }
 
-function buildWeatherReply(context) {
-    if (!context?.available) return "예보 제공 범위 밖이라 날씨 필터 없이 추천했습니다.";
+function buildWeatherReply(context, language = "ko") {
+    if (!context?.available) return t("weather.unavailable", {}, language);
     const lines = context.forecasts.map((forecast) => {
         const reason = forecast.reasons.length > 0
-            ? ` · ${forecast.reasons.join("·")}로 실내 권장`
-            : " · 일반 추천";
-        return `${forecast.date}: 강수 ${forecast.rainProb ?? "-"}% · ${forecast.minTemp ?? "-"}~${forecast.maxTemp ?? "-"}℃${reason}`;
+            ? t("weather.reasonIndoor", {
+                reasons: forecast.reasons.map((value) => label("weather.reason", value, language)),
+            }, language)
+            : t("weather.reasonNormal", {}, language);
+
+        return t("weather.forecastLine", {
+            date: forecast.date,
+            rainProb: forecast.rainProb ?? "-",
+            minTemp: forecast.minTemp ?? "-",
+            maxTemp: forecast.maxTemp ?? "-",
+            reason,
+        }, language);
     });
-    return `여행 기간 날씨를 반영했습니다.\n${lines.join("\n")}`;
+    return `${t("weather.header", {}, language)}\n${lines.join("\n")}`;
 }
 
 module.exports = {

@@ -1,5 +1,6 @@
 const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants");
 const { decidePostBookingStep } = require("./postBookingService");
+const { t } = require("./messageService");
 const {
     searchLocation: searchKakaoLocation,
 } = require("./kakaoLocationService");
@@ -144,7 +145,7 @@ async function handleLocationInput({
                 route_number: ROUTE_NUMBER.ROUTE_PLANNING,
                 current_step: CURRENT_STEP.READY_FOR_ROUTE_PLANNING,
                 last_question_field: null,
-                reply: "숙소를 확인했습니다. 날짜별 최적 동선을 계산할게요.",
+                reply: t("accommodation.confirmed", {}, facts.language),
             };
         }
 
@@ -210,7 +211,7 @@ async function handleLocationInput({
                 route_number: ROUTE_NUMBER.ROUTE_PLANNING,
                 current_step: CURRENT_STEP.READY_FOR_ROUTE_PLANNING,
                 last_question_field: null,
-                reply: "출발지를 확인했습니다. 최적 동선을 계산할게요.",
+                reply: t("departure.confirmed", {}, facts.language),
             };
         }
 

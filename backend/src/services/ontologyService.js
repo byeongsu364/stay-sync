@@ -1,6 +1,7 @@
 const correctionOntology = require("../ontology/correctionOntology");
 const companionOntology = require("../ontology/companionOntology");
 const themeOntology = require("../ontology/themeOntology");
+const interestOntology = require("../ontology/interestOntology");
 const weatherOntology = require("../ontology/weatherOntology");
 const dustOntology = require("../ontology/dustOntology");
 
@@ -19,13 +20,60 @@ const dustOntology = require("../ontology/dustOntology");
  * ==========================================================
  */
 
+function escapeRegExp(value) {
+    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * 온톨로지 키워드 대조
+ *
+ * 한국어는 조사가 붙어 나오므로 공백을 지운 문장에 substring으로 본다.
+ * 영어는 낱말 경계를 확인한다. 'son'이 'person'에, 'ski'가 'skip'에 걸리면 안 된다.
+ * 영어 키워드는 복수형 -s, -es까지 같은 말로 본다.
+ */
 function includesKeyword(text, keywords = []) {
-    const normalizedText = String(text || "").replace(/\s/g, "");
+    const value = String(text || "").normalize("NFC");
+    const compact = value.replace(/\s/g, "");
 
     return keywords.some((keyword) => {
-        const normalizedKeyword = String(keyword).replace(/\s/g, "");
-        return normalizedText.includes(normalizedKeyword);
+        const normalizedKeyword = String(keyword).normalize("NFC");
+        if (!normalizedKeyword) return false;
+
+        if (!/[a-z]/i.test(normalizedKeyword)) {
+            return compact.includes(normalizedKeyword.replace(/\s/g, ""));
+        }
+
+        const pattern = escapeRegExp(normalizedKeyword.toLowerCase()).replace(/\s+/g, "\\s+");
+        return new RegExp(`(?<![a-z0-9])${pattern}(?:es|s)?(?![a-z0-9])`, "i").test(value);
     });
+}
+
+// '내일부터 이틀간'처럼 필드 이름 없이 값만 말하는 정정도 많다.
+// 온톨로지 키워드로 못 잡는 날짜·기간 표현을 여기서 알아본다.
+const KOREAN_PERIOD_VALUE = new RegExp([
+    "\\d+월\\d*일?",
+    "\\d+일",
+    "\\d+박",
+    "\\d+주",
+    "\\d+박\\d+일",
+    "오늘|내일|모레|글피|주말|평일",
+    "하루|이틀|사흘|나흘|닷새|엿새|이레|여드레|아흐레|열흘",
+].join("|"));
+
+// 영어는 낱말 사이 공백이 뜻을 가지므로 공백을 지우지 않은 원문에서 찾는다.
+const ENGLISH_PERIOD_VALUE = new RegExp([
+    "\\b(?:today|tonight|tomorrow|weekend|weekday)\\b",
+    "\\bday\\s+after\\s+tomorrow\\b",
+    "\\b\\d+\\s*(?:days?|nights?|weeks?)\\b",
+    "\\b(?:a|an|one|two|three|four|five|six|seven|eight|nine|ten)\\s+(?:days?|nights?|weeks?)\\b",
+    "\\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\s*\\d{1,2}\\b",
+    "\\b\\d{1,2}\\s*/\\s*\\d{1,2}\\b",
+].join("|"), "i");
+
+function mentionsPeriodValue(text) {
+    const value = String(text || "");
+    return KOREAN_PERIOD_VALUE.test(value.replace(/\s/g, ""))
+        || ENGLISH_PERIOD_VALUE.test(value);
 }
 
 /**
@@ -35,6 +83,7 @@ function includesKeyword(text, keywords = []) {
  * "다산호텔 아닌데?" → accommodation
  * "하루 더 가는데?" → period
  * "친구 아니고 가족이야" → companion_type
+ * "아니다 내일부터 이틀간" → period
  */
 function detectCorrectionTarget(text) {
     for (const [target, keywords] of Object.entries(correctionOntology)) {
@@ -42,6 +91,9 @@ function detectCorrectionTarget(text) {
             return target;
         }
     }
+
+    if (mentionsPeriodValue(text)) return "period";
+    if (normalizeCompanionType(text)) return "companion_type";
 
     return null;
 }
@@ -74,6 +126,19 @@ function normalizeCompanionType(text) {
     }
 
     return null;
+}
+
+/**
+ * 하고 싶은 활동 표현 → 관광 테마
+ *
+ * 예:
+ * "가평 빠지를 가고싶어" → ["레저스포츠"]
+ * "계곡이랑 박물관" → ["자연관광", "문화관광"]
+ */
+function detectInterestThemes(text) {
+    return Object.entries(interestOntology)
+        .filter(([, keywords]) => includesKeyword(text, keywords))
+        .map(([theme]) => theme);
 }
 
 /**
@@ -116,7 +181,9 @@ function mergeThemes(...themeGroups) {
 
 module.exports = {
     includesKeyword,
+    mentionsPeriodValue,
     detectCorrectionTarget,
+    detectInterestThemes,
     normalizeCompanionType,
     mapCompanionToThemes,
     mapWeatherToThemes,

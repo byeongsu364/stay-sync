@@ -62,7 +62,7 @@ for (const booked of [false, true]) {
         assert.equal(result.currentStep, "ASK_PERIOD");
         assert.equal(chat.facts().trip_type, "당일치기");
         assert.equal(chat.facts().companion_type, "가족");
-        assert.equal(chat.facts().interest_place.name, "자라섬");
+        assert.deepEqual(chat.facts().interest_places.map(({ name }) => name), ["자라섬"]);
         assert.equal(chat.facts().region, "가평");
         assert.equal(chat.facts().start_date, null);
         assert.equal(chat.facts().end_date, null);
@@ -83,7 +83,7 @@ for (const booked of [false, true]) {
         const expected = parseSimplePeriod("내일 하루");
         assert.equal(result.currentStep, "ASK_START_LOCATION");
         assert.equal(result.facts.companion_type, "가족");
-        assert.equal(result.facts.interest_place.name, "자라섬");
+        assert.deepEqual(result.facts.interest_places.map(({ name }) => name), ["자라섬"]);
         assert.equal(result.facts.region, "가평");
         assert.equal(chat.facts().start_date, expected.start_date);
         assert.equal(chat.facts().end_date, expected.start_date);
@@ -128,7 +128,7 @@ for (const booked of [false, true]) {
             assert.equal(destination.currentStep, "ASK_PERIOD");
             assert.equal(chat.facts().companion_type, "가족");
             assert.equal(chat.facts().region, "가평");
-            assert.equal(chat.facts().interest_place.name, "자라섬");
+            assert.deepEqual(chat.facts().interest_places.map(({ name }) => name), ["자라섬"]);
             assert.deepEqual(chat.facts().interest_themes, ["자연관광"]);
             const period = await chat.send(overnight ? "내일부터 이틀간" : "내일 하루");
             assert.equal(period.currentStep, overnight ? "ASK_ACCOMMODATION" : "ASK_START_LOCATION");
@@ -181,7 +181,9 @@ test("recommendation failures retain the provided location and companion for ret
     await chat.send("가족들이랑 자라섬을 가려고해");
     await chat.send("내일 하루");
     failRecommendation = true;
-    await assert.rejects(chat.send(location.name, location), /test recommendation outage/);
+    // 추천이 실패해도 오류를 내보내지 않고 다시 물어 대화를 이어간다.
+    const failed = await chat.send(location.name, location);
+    assert.match(failed.reply, /다시 말씀해주시겠어요|Could you say that again/);
     assert.equal(chat.step(), "READY_FOR_RECOMMENDATION");
     assert.equal(chat.facts().start_location.name, location.name);
     assert.equal(chat.facts().companion_type, "가족");

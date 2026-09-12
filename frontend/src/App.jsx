@@ -168,12 +168,14 @@ function App() {
         apiBaseUrl: API_BASE_URL,
         online: navigator.onLine,
       })
-      const message = error instanceof TypeError && error.message === 'Failed to fetch'
-        ? `응답을 받는 도중 연결이 끊겼습니다. 잠시 후 다시 시도해주세요. 추적 ID: ${requestId}`
-        : error.message
+      // 오류 화면으로 대화를 끊는 대신, 직전에 하던 질문을 다시 보여준다.
+      const lastQuestion = [...messages].reverse()
+        .find((item) => item.sender === 'bot' && !item.isError)?.text
       setMessages((current) => [...current, {
         id: crypto.randomUUID(), sender: 'bot',
-        text: `오류가 발생했습니다. ${message}`, isError: true,
+        text: lastQuestion
+          ? `죄송합니다. 방금 답변을 만들지 못했어요. 다시 여쭤볼게요.\n\n${lastQuestion}`
+          : '죄송합니다. 방금 답변을 만들지 못했어요. 한 번만 다시 말씀해주시겠어요?',
       }])
     } finally {
       setIsSending(false)

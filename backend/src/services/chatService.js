@@ -1,6 +1,10 @@
 const sessionService = require("./sessionService");
 const { classifyIntent } = require("./intentService");
-const { handleCorrection } = require("./correctionService");
+const {
+    handleCorrection,
+    mentionsCorrection,
+    mentionsValueBesidesCorrection,
+} = require("./correctionService");
 const {
     extractTravelIntent,
     parseSimplePeriod,
@@ -25,8 +29,8 @@ const {
     planRouteOnlyByDays,
 } = require("./routePlanningService");
 const {
-    SERVICE_TYPE_PROMPT,
-    SERVICE_TYPE_OPTIONS,
+    buildServiceTypePrompt,
+    buildServiceTypeOptions,
     selectServiceType,
     handleAttractionRegionInput,
     resolveSupportedDestination,
@@ -47,6 +51,16 @@ const {
 const { createTravelStory } = require("./travelStoryService");
 
 const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants");
+const { pickJosa } = require("../utils/koreanUtils");
+const { displayName } = require("../utils/attractionNameUtils");
+const { t, regionLabel, themeLabel, companionLabel } = require("./messageService");
+const { buildRetryResult } = require("./stepQuestionService");
+const REGIONS = require("../data/regionData");
+const { detectLanguage } = require("./languageService");
+const {
+    isRegionAvailableInEnglish,
+    buildUnavailableRegionReply,
+} = require("./englishCoverageService");
 
 /**
  * ==========================================================
@@ -67,7 +81,13 @@ const { CURRENT_STEP, ROUTE_NUMBER, SERVICE_TYPE } = require("../data/constants"
  * ==========================================================
  */
 
-async function handleChat({ sessionId, userMessage, selectedLocation = null, requestId = "unknown" }) {
+async function runChat({
+    sessionId,
+    userMessage,
+    selectedLocation = null,
+    requestId = "unknown",
+    language = null,
+}) {
 
     const debug = (stage, detail = "") => {
         console.log(`[chat-debug:${requestId}] ${stage}${detail ? ` ${detail}` : ""}`);
@@ -84,6 +104,15 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
 
     const message =
         String(userMessage).trim();
+
+    // 한 번 정해진 언어는 세션에 남고, 사용자가 언어를 바꾸면 그때부터 바뀐다.
+    facts = {
+        ...facts,
+        language: detectLanguage(message, {
+            sessionLanguage: session.language,
+            locale: language,
+        }),
+    };
 
     if ([CURRENT_STEP.ASK_SERVICE_TYPE, CURRENT_STEP.ASK_REGION,
         CURRENT_STEP.ASK_ATTRACTION_REGION, CURRENT_STEP.ASK_PERIOD].includes(session.currentStep)) {
@@ -104,17 +133,61 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
         }
     }
 
+    function interestPlaceNames(destinationFacts) {
+        return (destinationFacts.interest_places || [])
+            .map((place) => displayName(place, destinationFacts.language));
+    }
+
     function destinationPeriodQuestion(destinationFacts) {
-        const destination = destinationFacts.interest_place?.name
-            ? `${destinationFacts.interest_place.name}(${destinationFacts.region})`
-            : destinationFacts.region;
-        const companion = destinationFacts.companion_type
-            ? ` 동행자 유형은 '${destinationFacts.companion_type}'로 저장했어요.` : "";
-        const visit = destinationFacts.interest_place?.visitConfirmed ? " 방문 목록에도 추가했습니다." : "";
-        return `${destination} 여행으로 확인했습니다.${visit}${companion} ${buildPeriodQuestion(destinationFacts)}`;
+        const language = destinationFacts.language || "ko";
+        const names = interestPlaceNames(destinationFacts);
+        const region = regionLabel(destinationFacts.region, language);
+        const destination = names.length ? `${names.join(", ")}(${region})` : region;
+
+        const confirmed = (destinationFacts.interest_places || []).some(({ visitConfirmed }) => visitConfirmed);
+        const visit = !confirmed
+            ? ""
+            : names.length > 1
+                ? t("travel.visitAddedMany", { count: names.length }, language)
+                : t("travel.visitAdded", {}, language);
+
+        // 하고 싶은 활동만 말해 관광지가 없는 경우가 있어, 무엇을 저장했는지 알려준다.
+        const themes = (destinationFacts.interest_themes || [])
+            .map((value) => themeLabel(value, language));
+        const theme = themes.length ? t("travel.themeSaved", { themes }, language) : "";
+
+        const companionType = destinationFacts.companion_type;
+        const companion = companionType
+            ? t("travel.companionSaved", { companion: companionType }, language)
+            : "";
+
+        return t("travel.destinationConfirmed", {
+            destination,
+            visit,
+            theme,
+            companion,
+            question: buildPeriodQuestion(destinationFacts),
+        }, language);
+    }
+
+    // 영어로는 영문명이 있는 관광지만 추천하므로, 그런 관광지가 없는 지역은 진행하지 않는다.
+    // 날짜와 동행자까지 다 받은 뒤 막히지 않도록 지역을 고르는 자리에서 확인한다.
+    async function blockRegionUnavailableInEnglish(destinationFacts) {
+        if (destinationFacts.language !== "en") return null;
+        if (await isRegionAvailableInEnglish(destinationFacts.region)) return null;
+
+        const unavailable = await buildUnavailableRegionReply(destinationFacts.region);
+        return {
+            ...unavailable,
+            currentStep: session.currentStep,
+            facts,
+        };
     }
 
     async function advanceFromDestination(destinationFacts) {
+        const blocked = await blockRegionUnavailableInEnglish(destinationFacts);
+        if (blocked) return blocked;
+
         const nextFacts = applyTripType(destinationFacts);
         let step = decideTravelIntentStep(nextFacts);
         if (step.current_step === CURRENT_STEP.READY_FOR_ACCOMMODATION_RECOMMENDATION) {
@@ -132,9 +205,13 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             routeNumber: step.route_number,
             lastQuestionField: questionFields[step.current_step] || null,
         });
+        const names = interestPlaceNames(nextFacts);
         const details = [
-            nextFacts.interest_place?.name
-                ? `${nextFacts.interest_place.visitConfirmed ? "방문 확정 관광지" : "관심 관광지"}: ${nextFacts.interest_place.name}` : null,
+            names.length
+                ? `${nextFacts.interest_places.some(({ visitConfirmed }) => visitConfirmed)
+                    ? "방문 확정 관광지" : "관심 관광지"}: ${names.join(", ")}` : null,
+            nextFacts.interest_themes?.length
+                ? `관심 테마: ${nextFacts.interest_themes.join(", ")}` : null,
             nextFacts.companion_type ? `동행자: ${nextFacts.companion_type}` : null,
             nextFacts.period ? `여행 일정: ${nextFacts.period}` : null,
         ].filter(Boolean).join(" · ");
@@ -144,6 +221,35 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
                 : `${details}\n\n${step.reply}`,
             currentStep: step.current_step,
             facts: nextFacts,
+        };
+    }
+
+    // 정정하는 뉘앙스가 나오면 바로 앞 섹션으로 되돌린다.
+    // 아래 단계들은 정정 처리보다 먼저 실행되므로, 입력을 알아듣지 못했을 때 여기서 되돌린다.
+    async function rollbackToPreviousSection(currentFacts, currentStep) {
+        if (!mentionsCorrection(message)) return null;
+
+        const correctionResult = handleCorrection({
+            userMessage: message,
+            facts: currentFacts,
+            currentStep,
+        });
+        if (!correctionResult.handled) return null;
+
+        await sessionService.saveConversationState({
+            sessionId,
+            facts: correctionResult.facts,
+            currentStep: correctionResult.currentStep,
+            routeNumber: correctionResult.routeNumber,
+            lastQuestionField: correctionResult.lastQuestionField,
+            correctionTarget: correctionResult.correctionTarget,
+            rollbackFields: correctionResult.rollbackFields,
+        });
+
+        return {
+            reply: correctionResult.reply,
+            currentStep: correctionResult.currentStep,
+            facts: correctionResult.facts,
         };
     }
 
@@ -166,6 +272,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             }),
             getAirQuality(recommendationFacts.region),
         ]);
+        const language = recommendationFacts.language || "ko";
         const indoorRecommended = weatherContext.indoorRecommended
             || airQualityContext.indoorRecommended;
         const recommendationArgs = {
@@ -178,6 +285,8 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
                 ...(recommendationFacts.selected_places || []).map(({ id }) => id),
             ])],
             origin: recommendationFacts.start_location,
+            // 영어 대화에서는 이름을 영어로 보여줄 수 있는 관광지만 추천한다.
+            englishOnly: recommendationFacts.language === "en",
         };
         let result = await recommendAttractions({
             ...recommendationArgs,
@@ -191,16 +300,26 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             usedIndoorFallback = true;
         }
 
+        // 동행자를 방금 받은 뒤 바로 추천이 나가므로,
+        // 무엇으로 알아들었는지 먼저 알려줘야 잘못 잡혔을 때 고칠 수 있다.
+        const companion = recommendationFacts.companion_type
+            ? `${t("companion.confirmed", {
+                companion: companionLabel(recommendationFacts.companion_type, language),
+            }, language)}\n`
+            : "";
+        const situation = `${companion}`
+            + `${buildWeatherReply(weatherContext, language)}\n`
+            + `${buildAirQualityReply(airQualityContext, language)}\n`;
+
         return {
             ...result,
-            situationSummary:
-                `${buildWeatherReply(weatherContext)}\n${buildAirQualityReply(airQualityContext)}\n`
+            situationSummary: situation
                 + (indoorRecommended && !usedIndoorFallback
-                    ? "상황인지 판단에 따라 실내 관광지만 우선 추천했습니다."
+                    ? t("situation.indoorOnly", {}, language)
                     : indoorRecommended && usedIndoorFallback
-                        ? "실내 관광지가 부족해 일반 관광지까지 함께 추천했습니다."
-                        : "야외 활동에 큰 제약이 없어 테마와 인기도를 중심으로 추천했습니다."),
-            reply: `${buildWeatherReply(weatherContext)}\n${buildAirQualityReply(airQualityContext)}\n\n${result.reply}`,
+                        ? t("situation.indoorFallback", {}, language)
+                        : t("situation.noConstraint", {}, language)),
+            reply: `${situation}\n${result.reply}`,
             weatherContext,
             airQualityContext,
             weatherFilter: indoorRecommended && !usedIndoorFallback
@@ -276,7 +395,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
 
         return {
             reply:
-                `${story ? `${story}\n\n정확한 이동 동선\n\n` : ""}${routeResult.reply}\n\n`
+                `${story ? `${story}\n\n${t("route.exactPath", {}, facts.language)}\n\n` : ""}${routeResult.reply}\n\n`
                 + "아래 카카오맵 길찾기 링크로 동선을 확인할 수 있습니다.",
             currentStep: CURRENT_STEP.ROUTE_OPTIMIZED,
             facts: finalFacts,
@@ -312,7 +431,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
         });
 
         return {
-            reply: `${story ? `${story}\n\n정확한 이동 동선\n\n` : ""}${routeResult.reply}\n\n아래 카카오맵 길찾기 링크로 동선을 확인할 수 있습니다.`,
+            reply: `${story ? `${story}\n\n${t("route.exactPath", {}, facts.language)}\n\n` : ""}${routeResult.reply}\n\n${t("route.kakaoLinks", {}, facts.language)}`,
             currentStep: CURRENT_STEP.ROUTE_OPTIMIZED,
             facts: finalFacts,
             finalRoute: routeResult.dailyRoutes,
@@ -323,10 +442,10 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
     if (session.currentStep === CURRENT_STEP.ASK_SERVICE_TYPE) {
         if (["안녕", "안녕하세요", "하이", "ㅎㅇ", "hello", "hi"].includes(message.toLowerCase())) {
             return {
-                reply: `안녕하세요!\n\n${SERVICE_TYPE_PROMPT}`,
+                reply: t("greeting.hello", { prompt: buildServiceTypePrompt(facts.language) }, facts.language),
                 currentStep: CURRENT_STEP.ASK_SERVICE_TYPE,
                 facts,
-                quickReplies: SERVICE_TYPE_OPTIONS,
+                quickReplies: buildServiceTypeOptions(facts.language),
             };
         }
 
@@ -344,11 +463,10 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             if (!destinationFacts) {
                 return {
                     reply:
-                        "문장에서 지원하는 여행지를 찾지 못했습니다. 아래 지역이나 보유 관광지명을 포함해 말씀해주세요. 예: 자라섬으로 여행 갈 거야.\n\n"
-                        + "고양, 파주, 의정부, 양주, 동두천, 포천, 남양주, 구리, 가평, 연천",
+                        t("region.notSupported", { regions: REGIONS.join(", ") }, facts.language),
                     currentStep: CURRENT_STEP.ASK_SERVICE_TYPE,
                     facts,
-                    quickReplies: SERVICE_TYPE_OPTIONS,
+                    quickReplies: buildServiceTypeOptions(facts.language),
                 };
             }
 
@@ -375,7 +493,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
 
         if (!nextFacts) {
             return {
-                reply: "지원 지역이나 해당 지역의 관광지를 찾지 못했습니다. 여행 지역 또는 관광지명을 다시 입력해주세요.",
+                reply: t("region.askAgain", {}, facts.language),
                 currentStep: session.currentStep,
                 facts,
             };
@@ -394,8 +512,11 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             const unresolvedText = resolved.unresolved.length > 0
                 ? `\n찾지 못한 장소: ${resolved.unresolved.join(", ")}`
                 : "";
+            const rolledBack = await rollbackToPreviousSection(facts, session.currentStep);
+            if (rolledBack) return rolledBack;
+
             return {
-                reply: `관광지를 모두 확인하지 못했습니다.${unresolvedText}\n장소명을 쉼표로 구분해 다시 입력해주세요.`,
+                reply: t("routeOnly.attractionsNotFound", { unresolved: unresolvedText }, facts.language),
                 currentStep: CURRENT_STEP.ASK_ROUTE_ATTRACTIONS,
                 facts,
             };
@@ -403,7 +524,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
 
         if (facts.travel_days > resolved.places.length) {
             return {
-                reply: `${facts.travel_days}일 동선을 만들려면 관광지가 최소 ${facts.travel_days}개 필요합니다. 관광지를 더 추가해 다시 선택해주세요.`,
+                reply: t("routeOnly.needMoreAttractions", { days: facts.travel_days }, facts.language),
                 currentStep: CURRENT_STEP.ASK_ROUTE_ATTRACTIONS,
                 facts,
             };
@@ -439,7 +560,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
         const travelDays = parseTravelDays(message);
         if (!travelDays || travelDays > 30) {
             return {
-                reply: "여행 일수를 1일부터 30일 사이로 입력해주세요. 예: 2일",
+                reply: t("routeOnly.invalidDays", {}, facts.language),
                 currentStep: CURRENT_STEP.ASK_ROUTE_DAYS,
                 facts,
             };
@@ -458,7 +579,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             lastQuestionField: "selected_places",
         });
         return {
-            reply: `${travelDays}일 일정으로 확인했습니다. 방문할 관광지를 /관광지명으로 검색해 선택해주세요.`,
+            reply: t("routeOnly.daysConfirmed", { days: travelDays }, facts.language),
             currentStep: CURRENT_STEP.ASK_ROUTE_ATTRACTIONS,
             facts: routeFacts,
         };
@@ -483,14 +604,14 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
 
         if (session.currentStep !== CURRENT_STEP.ASK_REGION) {
             return {
-                reply: "안녕하세요! 계속 진행해볼까요?",
+                reply: t("greeting.continue", {}, facts.language),
                 currentStep: session.currentStep,
                 facts,
             };
         }
 
         return {
-            reply: SERVICE_TYPE_PROMPT,
+            reply: buildServiceTypePrompt(facts.language),
             currentStep: session.currentStep,
             facts,
         };
@@ -510,6 +631,9 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
         });
 
         if (!selectionResult.handled) {
+            const rolledBack = await rollbackToPreviousSection(facts, session.currentStep);
+            if (rolledBack) return rolledBack;
+
             return {
                 reply: selectionResult.reply,
                 currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
@@ -581,7 +705,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             });
 
             return {
-                reply: "직전에 선택한 관광지를 취소했습니다. 추천 목록에서 다시 선택해주세요.",
+                reply: t("selection.undone", {}, facts.language),
                 currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
                 facts: selectionFacts,
                 recommendations: facts.related_places,
@@ -590,7 +714,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
 
         if (answer === "unknown") {
             return {
-                reply: "관광지를 더 추천받을지, 지금 선택을 마칠지 편하게 말씀해주세요.",
+                reply: t("selection.askMoreUnclear", {}, facts.language),
                 currentStep: CURRENT_STEP.ASK_MORE_RECOMMENDATION,
                 facts,
             };
@@ -618,7 +742,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             ? ROUTE_NUMBER.ROUTE_PLANNING
             : ROUTE_NUMBER.RECOMMENDATION;
         const reply = recommendationResult.exhausted
-            ? `${recommendationResult.reply}\n\n선택한 관광지를 기준으로 최적 동선을 준비할게요.`
+            ? t("selection.readyForRoute", { reply: recommendationResult.reply }, facts.language)
             : recommendationResult.reply;
 
         if (recommendationResult.exhausted) {
@@ -673,6 +797,7 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
             handleCorrection({
                 userMessage: message,
                 facts,
+                currentStep: session.currentStep,
             });
 
         if (correctionResult.handled) {
@@ -687,11 +812,30 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
                 rollbackFields: correctionResult.rollbackFields,
             });
 
-            return {
-                reply: correctionResult.reply,
-                currentStep: correctionResult.currentStep,
-                facts: correctionResult.facts,
-            };
+            // '아니다 내일부터 이틀간'처럼 정정과 새 값을 한 문장에 말하는 경우가 많다.
+            // 되돌아간 단계가 아래 흐름에서 처리되는 단계면 같은 문장을 이어서 해석한다.
+            const reinterpretableSteps = [
+                CURRENT_STEP.ASK_PERIOD,
+                CURRENT_STEP.ASK_ACCOMMODATION,
+                CURRENT_STEP.ASK_START_LOCATION,
+                CURRENT_STEP.ASK_COMPANION_TYPE,
+            ];
+
+            if (
+                !reinterpretableSteps.includes(correctionResult.currentStep)
+                || !mentionsValueBesidesCorrection(message)
+            ) {
+                return {
+                    reply: correctionResult.reply,
+                    currentStep: correctionResult.currentStep,
+                    facts: correctionResult.facts,
+                };
+            }
+
+            facts = correctionResult.facts;
+            session.currentStep = correctionResult.currentStep;
+            session.routeNumber = correctionResult.routeNumber;
+            session.lastQuestionField = correctionResult.lastQuestionField;
         }
     }
 
@@ -873,6 +1017,33 @@ async function handleChat({ sessionId, userMessage, selectedLocation = null, req
         facts:
             result.facts,
     };
+}
+
+/**
+ * 대화 한 턴 처리
+ *
+ * 중간에 무엇이 잘못되든 오류 문구를 내보내지 않는다.
+ * 묻고 있던 질문을 다시 해서 대화를 이어간다.
+ */
+async function handleChat(request) {
+    const { sessionId, requestId = "unknown" } = request;
+
+    try {
+        return await runChat(request);
+    } catch (error) {
+        console.error(`[chat-debug:${requestId}] 처리 실패, 재질문으로 이어갑니다:`, error.stack || error.message);
+
+        // 세션을 못 읽는 상황까지 감안해 단계와 facts를 다시 읽어본다.
+        let session = null;
+        try {
+            session = await sessionService.loadSession(sessionId);
+        } catch (sessionError) {
+            console.error(`[chat-debug:${requestId}] 세션 조회도 실패:`, sessionError.message);
+        }
+
+        const facts = session ? sessionService.buildFactsFromSession(session) : {};
+        return buildRetryResult(session?.currentStep || null, facts);
+    }
 }
 
 module.exports = {

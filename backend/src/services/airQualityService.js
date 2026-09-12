@@ -1,5 +1,6 @@
 const axios = require("axios");
 const env = require("../config/env");
+const { t, label } = require("./messageService");
 
 const AIRKOREA_URL =
     "https://apis.data.go.kr/B552584/ArpltnInforInqireSvc/getCtprvnRltmMesureDnsty";
@@ -122,9 +123,13 @@ async function getAirQuality(region) {
     }
 }
 
-function buildAirQualityReply(context) {
-    if (!context?.available) return "미세먼지 정보는 제공되지 않았습니다.";
-    return `현재 대기질: ${context.grade} · PM10 ${context.pm10 ?? "-"}㎍/㎥ · PM2.5 ${context.pm25 ?? "-"}㎍/㎥`
+function buildAirQualityReply(context, language = "ko") {
+    if (!context?.available) return t("airQuality.unavailable", {}, language);
+    return t("airQuality.line", {
+        grade: label("airQuality.grade", context.grade, language),
+        pm10: context.pm10 ?? "-",
+        pm25: context.pm25 ?? "-",
+    }, language)
         + (context.indoorRecommended ? " · 실내 활동 권장" : "");
 }
 

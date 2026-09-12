@@ -4,6 +4,8 @@ const {
 } = require("../repositories/attractionRepository");
 const { getRoadDistances } = require("./roadNetworkService");
 const { enrichRecommendationItems } = require("./tourApiService");
+const { displayName } = require("../utils/attractionNameUtils");
+const { t, themeLabel } = require("./messageService");
 
 function normalizeRound(recommendationRound) {
     const parsed = Number.parseInt(recommendationRound, 10);
@@ -51,6 +53,7 @@ function toRecommendationItem(attraction) {
         id: attraction.id,
         contentId: attraction.contentId,
         name: attraction.title,
+        nameEn: attraction.titleEn || null,
         region: attraction.region,
         address: [attraction.address1, attraction.address2]
             .filter(Boolean)
@@ -72,21 +75,22 @@ function toRecommendationItem(attraction) {
     };
 }
 
-function buildRecommendationReply({ recommendations, page, hasMore }) {
-    const lines = recommendations.map((attraction, index) => (
-        `${index + 1}. ${attraction.name}\n`
-        + `   - 테마: ${attraction.theme}\n`
-        + `   - 주소: ${attraction.address}`
-    ));
+function buildRecommendationReply({ recommendations, page, hasMore, language = "ko" }) {
+    const lines = recommendations.map((attraction, index) => t("recommendation.item", {
+        index: index + 1,
+        name: displayName(attraction, language),
+        theme: themeLabel(attraction.theme, language),
+        address: attraction.address,
+    }, language));
 
     const nextMessage = hasMore
-        ? "\n\n마음에 드는 관광지를 선택해주세요. 선택 후 추가 추천도 받을 수 있습니다."
-        : "\n\n현재 조건으로 추천할 수 있는 마지막 관광지입니다. 마음에 드는 관광지를 선택해주세요.";
+        ? t("recommendation.hasMore", {}, language)
+        : t("recommendation.last", {}, language);
 
     return (
-        `검색순 ${page.startRank}~${page.endRank} 관광지 추천입니다.\n\n`
+        `${t("recommendation.header", { startRank: page.startRank, endRank: page.endRank }, language)}\n\n`
         + lines.join("\n\n")
-        + nextMessage
+        + `\n\n${nextMessage}`
     );
 }
 
@@ -97,6 +101,7 @@ async function recommendPopularAttractions({
     recommendationRound = 1,
     recommendedHistory = [],
     indoorOutdoor = null,
+    englishOnly = false,
 }) {
     const page = getRecommendationPage({
         tripType,
@@ -111,6 +116,7 @@ async function recommendPopularAttractions({
         limit: page.limit + 1,
         excludeAttractionIds: historyIds,
         indoorOutdoor,
+        englishOnly,
     });
 
     const hasMore = candidates.length > page.limit;
@@ -129,7 +135,7 @@ async function recommendPopularAttractions({
             nextRecommendationRound: null,
             hasMore: false,
             exhausted: true,
-            reply: "현재 지역과 테마에 맞는 관광지가 더 이상 없습니다.",
+            reply: t("recommendation.exhausted", {}, englishOnly ? "en" : "ko"),
         };
     }
 
@@ -144,6 +150,7 @@ async function recommendPopularAttractions({
             recommendations,
             page,
             hasMore,
+            language: englishOnly ? "en" : "ko",
         }),
     };
 }
@@ -189,6 +196,7 @@ async function recommendAttractions({
     recommendedHistory = [],
     indoorOutdoor = null,
     origin = null,
+    englishOnly = false,
 }) {
     if (tripType === "당일치기") {
         return await recommendPopularAttractions({
@@ -198,6 +206,7 @@ async function recommendAttractions({
             recommendationRound,
             recommendedHistory,
             indoorOutdoor,
+            englishOnly,
         });
     }
 
@@ -210,6 +219,7 @@ async function recommendAttractions({
         recommendationRound,
         recommendedHistory,
         indoorOutdoor,
+        englishOnly,
     });
     const popular = popularResult.recommendations.map((attraction) => ({
         ...attraction,
@@ -227,6 +237,7 @@ async function recommendAttractions({
                 region,
                 themes,
                 indoorOutdoor,
+                englishOnly,
             });
             const distances = await getRoadDistances({
                 origin,

@@ -1,5 +1,6 @@
 const intentPrompt = require("../prompts/intentPrompt");
 const { callLLMJson } = require("./llmService");
+const { mentionsCorrection } = require("./correctionService");
 
 /**
  * ==========================================================
@@ -32,8 +33,6 @@ const ALLOWED_INTENTS = [
 ];
 
 async function classifyIntent({ userMessage, currentStep, facts }) {
-    const normalized = String(userMessage || "").replace(/\s/g, "");
-    const correctionKeywords = ["잘못", "수정", "변경", "취소", "이전", "아니고"];
     const structuredInputSteps = new Set([
         "ASK_REGION",
         "ASK_ATTRACTION_REGION",
@@ -43,12 +42,12 @@ async function classifyIntent({ userMessage, currentStep, facts }) {
         "ASK_COMPANION_TYPE",
     ]);
 
-    // 정해진 정보를 수집하는 단계의 일반 입력은 LLM 장애와 지연의 영향을 받지 않는다.
-    if (
-        structuredInputSteps.has(currentStep)
-        && !correctionKeywords.some((keyword) => normalized.includes(keyword))
-    ) {
-        return { intent: "normal" };
+    // 정해진 정보를 수집하는 단계에서는 LLM 장애와 지연의 영향을 받지 않는다.
+    // '아니다'처럼 앞선 답을 무르는 표현은 정정으로 확정하고, 나머지는 일반 입력으로 둔다.
+    if (structuredInputSteps.has(currentStep)) {
+        return {
+            intent: mentionsCorrection(userMessage) ? "correction" : "normal",
+        };
     }
 
     const userPrompt = `
