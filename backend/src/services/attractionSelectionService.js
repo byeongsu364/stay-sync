@@ -69,7 +69,12 @@ function classifyMoreRecommendationFallback(userMessage) {
         "아니", "아니요", "ㄴㄴ", "노노", "싫어", "필요없", "괜찮", "됐어", "끝", "완료", "그만",
     ];
     const exactPositiveAnswers = ["네", "예", "응", "어", "ㅇㅇ", "그래", "좋아"];
-    const positiveKeywords = ["계속", "추가", "더추천", "더보여", "받을게"];
+    const positiveKeywords = [
+        "계속", "추가", "더추천", "더보여", "받을게",
+        "다른곳", "다른거", "다른관광지", "다음목록",
+        "마음에드는곳없", "마음에드는곳이없", "원하는곳없", "원하는곳이없", "고를게없",
+        "nothingilike", "noneofthese", "showmeother", "somethingelse",
+    ];
 
     if (undoKeywords.some((keyword) => message.includes(keyword))) {
         return "undo";

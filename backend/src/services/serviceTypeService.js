@@ -129,6 +129,8 @@ function withInterestThemes(facts, themes) {
 async function resolveSupportedDestination(input, facts = {}) {
     const text = String(input || "").trim().slice(0, 1000);
     const normalizedInput = normalizeName(text);
+    const language = facts.language || "ko";
+
     const attractions = await searchAttractionsByName({ name: text, mentionedInText: true });
     const exactMatches = attractions.filter(({ title, region, titleEn }) => (
         buildTitleAliases(title, region, titleEn).includes(normalizedInput)
@@ -148,10 +150,21 @@ async function resolveSupportedDestination(input, facts = {}) {
     const candidateRegions = [...new Set(candidates.map(({ region }) => region))];
     const hasNegativeIntent = /말고|아니|안\s*가|않|싫|제외|취소/.test(text);
 
+    // '경기북부'는 서비스 범위이지 하나의 여행 지역이 아니다.
+    // 단, 함께 말한 관광지가 확인되면 그 관광지의 지역을 정상적으로 사용한다.
+    if (candidates.length === 0 && regions.length === 0
+        && /경기\s*북부|northern\s+gyeonggi/i.test(text)) {
+        return {
+            needsDestinationChoice: true,
+            reply: t("region.chooseNorthern", { regions: REGIONS.join(", ") }, language),
+            quickReplies: REGIONS.map((region) => ({ label: region, value: region })),
+        };
+    }
+
     // 한 지역 안의 관광지는 여러 곳을 한 번에 말해도 모두 받아들인다.
     // 지역이 갈리거나 제외 표현이 섞이면 어디를 가려는지 알 수 없으므로 되묻는다.
     if (hasNegativeIntent || regions.length > 1 || candidateRegions.length > 1) {
-        return destinationClarification(candidates, regions);
+        return destinationClarification(candidates, regions, language);
     }
 
     // '빠지', '글램핑'처럼 관광지명이 아니라 하고 싶은 활동을 말하는 경우가 있다.
@@ -166,7 +179,7 @@ async function resolveSupportedDestination(input, facts = {}) {
     const region = candidateRegions[0];
     if (!REGIONS.includes(region)) return null;
     if (regions.length && regions[0] !== region) {
-        return destinationClarification(candidates, regions, facts.language);
+        return destinationClarification(candidates, regions, language);
     }
 
     const compact = text.replace(/\s/g, "");

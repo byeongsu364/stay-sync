@@ -1,11 +1,40 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:4000').replace(/\/$/, '')
+const CHAT_STORAGE_KEY = 'stay-sync.chat-session.v1'
 const INITIAL_OPTIONS = [
-  { label: '숙소를 이미 예약했어요', value: '2' },
-  { label: '동선만 추천받고 싶어요', value: '3' },
+  { label: '숙소 예약 완료', value: '2' },
+  { label: '관광지 선택 완료 · 동선만', value: '3' },
 ]
+
+const INITIAL_MESSAGE = {
+  id: 'greeting',
+  sender: 'bot',
+  text: '안녕하세요! 경기북부에서 가고 싶은 여행 지역이나 관광지명을 입력해주세요.\n예: 가평, 자라섬, 가족과 파주 여행\n지원 지역: 고양, 파주, 의정부, 양주, 동두천, 포천, 남양주, 구리, 가평, 연천\n\n숙소 또는 관광지를 이미 정한 경우에만 아래 항목을 선택해주세요.',
+  quickReplies: INITIAL_OPTIONS,
+}
+
+function loadSavedChat() {
+  try {
+    const raw = window.sessionStorage.getItem(CHAT_STORAGE_KEY)
+    if (!raw) return null
+    const saved = JSON.parse(raw)
+    if (!saved?.sessionId || !Array.isArray(saved.messages) || !saved.currentStep) return null
+    return saved
+  } catch (error) {
+    console.warn('저장된 채팅을 복원하지 못했습니다.', error)
+    return null
+  }
+}
+
+function saveChat(snapshot) {
+  try {
+    window.sessionStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(snapshot))
+  } catch (error) {
+    console.warn('채팅 상태를 저장하지 못했습니다.', error)
+  }
+}
 
 function MessageText({ text }) {
   const parts = String(text || '').split(/(https?:\/\/[^\s]+)/g)
@@ -26,31 +55,55 @@ function MessageText({ text }) {
 
 function App() {
   const browserLocale = navigator.language || 'ko-KR'
-  // 현재 UI는 대화 내역을 복원하지 않으므로 새 화면에는 새 세션을 사용한다.
-  // 이전 세션 ID만 재사용하면 첫 선택이 이전 단계의 답변으로 오인될 수 있다.
-  const [sessionId] = useState(() => crypto.randomUUID())
-  const [messages, setMessages] = useState([
-    {
-      id: 'greeting',
-      sender: 'bot',
-      text: '안녕하세요! 어디로 여행을 가시나요?\n\n숙소를 이미 예약하셨거나 동선만 추천받고 싶다면 아래 항목을 선택해주세요.',
-      quickReplies: INITIAL_OPTIONS,
-    },
-  ])
-  const [input, setInput] = useState('')
+  const restoredChatRef = useRef(undefined)
+  if (restoredChatRef.current === undefined) restoredChatRef.current = loadSavedChat()
+  const restoredChat = restoredChatRef.current
+  const [sessionId] = useState(() => restoredChat?.sessionId || crypto.randomUUID())
+  const [messages, setMessages] = useState(() => restoredChat?.messages || [INITIAL_MESSAGE])
+  const [input, setInput] = useState(() => restoredChat?.input || '')
   const [isSending, setIsSending] = useState(false)
-  const [currentStep, setCurrentStep] = useState('ASK_SERVICE_TYPE')
-  const [currentFacts, setCurrentFacts] = useState({})
-  const [selectedAttractions, setSelectedAttractions] = useState([])
-  const [selectedRecommendations, setSelectedRecommendations] = useState([])
+  const [currentStep, setCurrentStep] = useState(() => restoredChat?.currentStep || 'ASK_SERVICE_TYPE')
+  const [currentFacts, setCurrentFacts] = useState(() => restoredChat?.currentFacts || {})
+  const [selectedAttractions, setSelectedAttractions] = useState(() => restoredChat?.selectedAttractions || [])
+  const [selectedRecommendations, setSelectedRecommendations] = useState(() => restoredChat?.selectedRecommendations || [])
   const [suggestions, setSuggestions] = useState([])
-  const [selectedLocation, setSelectedLocation] = useState(null)
+  const [selectedLocation, setSelectedLocation] = useState(() => restoredChat?.selectedLocation || null)
   const [detailAttraction, setDetailAttraction] = useState(null)
   const messagesEndRef = useRef(null)
   const inputRef = useRef(null)
+  const latestSnapshotRef = useRef(null)
+  const skipPersistenceRef = useRef(false)
+
+  const chatSnapshot = useMemo(() => ({
+    sessionId,
+    messages,
+    input,
+    currentStep,
+    currentFacts,
+    selectedAttractions,
+    selectedRecommendations,
+    selectedLocation,
+    savedAt: new Date().toISOString(),
+  }), [sessionId, messages, input, currentStep, currentFacts,
+    selectedAttractions, selectedRecommendations, selectedLocation])
+  latestSnapshotRef.current = chatSnapshot
 
   useEffect(() => {
-    if (browserLocale.toLowerCase().startsWith('ko')) return
+    if (!skipPersistenceRef.current) saveChat(chatSnapshot)
+  }, [chatSnapshot])
+
+  useEffect(() => {
+    const saveBeforeLeaving = () => {
+      if (!skipPersistenceRef.current && latestSnapshotRef.current) {
+        saveChat(latestSnapshotRef.current)
+      }
+    }
+    window.addEventListener('pagehide', saveBeforeLeaving)
+    return () => window.removeEventListener('pagehide', saveBeforeLeaving)
+  }, [])
+
+  useEffect(() => {
+    if (browserLocale.toLowerCase().startsWith('ko') || restoredChat) return
     const controller = new AbortController()
     fetch(`${API_BASE_URL}/api/chat/greeting?locale=${encodeURIComponent(browserLocale)}`, {
       signal: controller.signal,
@@ -66,7 +119,7 @@ function App() {
       })
       .catch(() => {})
     return () => controller.abort()
-  }, [browserLocale])
+  }, [browserLocale, restoredChat])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -188,6 +241,8 @@ function App() {
   }
 
   function resetChat() {
+    skipPersistenceRef.current = true
+    window.sessionStorage.removeItem(CHAT_STORAGE_KEY)
     window.location.reload()
   }
 
@@ -228,7 +283,7 @@ function App() {
     <main className="chat-page">
       <section className="chat-shell" aria-label="여행 추천 챗봇">
         <header className="chat-header">
-          <div className="brand"><span aria-hidden="true">S</span><div><h1>Stay Sync</h1><p>동행자 맞춤 여행 추천</p></div></div>
+          <div className="brand"><span aria-hidden="true">S</span><div><h1>Stay Sync</h1><p>경기북부 동행자 맞춤 여행 추천</p></div></div>
           <button type="button" className="reset-button" onClick={resetChat}>새 여행</button>
         </header>
 
@@ -239,6 +294,9 @@ function App() {
                 <MessageText text={message.text} />
                 {message.quickReplies && (
                   <div className="quick-replies">
+                    {message.quickReplies.some(({ value }) => value === '2') && (
+                      <span className="quick-replies-label">이미 준비한 여행 정보가 있다면</span>
+                    )}
                     {message.quickReplies.map((option) => (
                       <button key={option.value} type="button"
                         disabled={isSending || messageIndex !== messages.length - 1}
@@ -308,6 +366,12 @@ function App() {
         </div>
 
         <form className="chat-input" onSubmit={sendMessage}>
+          {currentStep === 'ASK_SERVICE_TYPE' && (
+            <div className="destination-input-guide">
+              <strong>① 경기북부 여행지를 먼저 입력해주세요</strong>
+              <span>지원 지역 또는 해당 지역의 관광지명을 적어주세요.</span>
+            </div>
+          )}
           <label className="sr-only" htmlFor="travel-message">메시지 입력</label>
           <div className="composer">
             {currentStep === 'ASK_ROUTE_ATTRACTIONS' && selectedAttractions.map((attraction) => (
@@ -332,7 +396,9 @@ function App() {
                   ? '출발지를 입력하세요'
                   : currentStep === 'ASK_ACCOMMODATION'
                     ? `${currentFacts.region || ''} 숙소를 입력하세요`.trim()
-                  : '메세지를 입력해주세요'}
+                  : currentStep === 'ASK_SERVICE_TYPE'
+                    ? '경기북부 여행지 입력 (예: 가평, 자라섬)'
+                    : '메시지를 입력해주세요'}
               autoComplete="off" disabled={isSending} />
             {suggestions.length > 0 && (
               <ul className="autocomplete-list">

@@ -87,9 +87,24 @@ test("a destination used only as a recommendation reference is not a confirmed s
 });
 
 test("unsupported or unrelated words are not destinations", async () => {
-    for (const input of ["rkvud", "고양이 보고 싶어", "부산으로 여행 갈 거야", "없는관광지로 갈래"]) {
+    for (const input of ["rkvud", "고양이 보고 싶어", "서울 여행", "수원 갈래", "인천", "부산으로 여행 갈 거야", "제주도", "없는관광지로 갈래"]) {
         assert.equal(await resolveSupportedDestination(input), null);
     }
+});
+
+test("Northern Gyeonggi as a broad area asks the user to choose one supported region", async () => {
+    const result = await resolveSupportedDestination("경기북부로 여행 갈래");
+    assert.equal(result.needsDestinationChoice, true);
+    assert.equal(result.quickReplies.length, 10);
+    assert.deepEqual(result.quickReplies.map(({ value }) => value), [
+        "고양", "파주", "의정부", "양주", "동두천", "포천", "남양주", "구리", "가평", "연천",
+    ]);
+});
+
+test("an attraction named with Northern Gyeonggi still resolves to its actual region", async () => {
+    const result = await resolveSupportedDestination("경기북부 자라섬으로 갈래");
+    assert.equal(result.region, "가평");
+    assert.deepEqual(result.selected_places.map(({ name }) => name), ["자라섬"]);
 });
 
 test("negated, multiple or conflicting destinations ask for confirmation", async () => {

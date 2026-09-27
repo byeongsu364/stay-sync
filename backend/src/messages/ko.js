@@ -11,20 +11,27 @@
 module.exports = {
     // 서비스 유형 선택
     "serviceType.prompt": [
-        "어디로 여행을 가시나요?",
+        "경기북부에서 가고 싶은 여행 지역이나 관광지명을 입력해주세요.",
+        "예: 가평, 자라섬, 가족과 파주 여행",
+        "지원 지역: 고양, 파주, 의정부, 양주, 동두천, 포천, 남양주, 구리, 가평, 연천",
         "",
-        "숙소를 이미 예약하셨거나 동선만 추천받고 싶다면 아래 항목을 선택해주세요.",
+        "숙소 또는 관광지를 이미 정한 경우에만 아래 항목을 선택해주세요.",
     ].join("\n"),
-    "serviceType.option.booked": "숙소를 이미 예약했어요",
-    "serviceType.option.routeOnly": "동선만 추천받고 싶어요",
-    "serviceType.invalid": "1번, 2번, 3번 중에서 선택해주세요.\n\n{prompt}",
+    "serviceType.option.booked": "숙소 예약 완료",
+    "serviceType.option.routeOnly": "관광지 선택 완료 · 동선만",
+    "serviceType.invalid": "여행지를 직접 입력하거나, 해당하는 경우 아래 버튼을 선택해주세요.\n\n{prompt}",
 
     // 지역과 관광지 입력
-    "region.askForAccommodation": "숙소를 추천받고 싶은 여행 지역을 입력해주세요.",
-    "region.askForAttraction": "여행하고 싶은 지역이나 관심 있는 관광지를 입력해주세요.",
-    "region.askAgain": "지원 지역이나 해당 지역의 관광지를 찾지 못했습니다. 여행 지역 또는 관광지명을 다시 입력해주세요.",
+    "region.askForAccommodation": "숙소를 추천받을 경기북부 여행 지역을 입력해주세요.",
+    "region.askForAttraction": "경기북부에서 여행하고 싶은 지역이나 관심 있는 관광지를 입력해주세요.",
+    "region.askAgain": "경기북부에서 여행하고 싶은 지역이나 관심 있는 관광지를 찾지 못했습니다. 지원 지역 또는 관광지명을 다시 입력해주세요.",
     "region.notSupported": [
-        "문장에서 지원하는 여행지를 찾지 못했습니다. 아래 지역이나 보유 관광지명을 포함해 말씀해주세요. 예: 자라섬으로 여행 갈 거야.",
+        "Stay Sync는 경기북부 10개 지역만 지원합니다. 아래 지역이나 해당 지역의 보유 관광지명을 입력해주세요. 예: 자라섬으로 여행 갈 거야.",
+        "",
+        "{regions}",
+    ].join("\n"),
+    "region.chooseNorthern": [
+        "경기북부의 어느 지역으로 여행하시나요? 아래 지역을 선택하거나 관광지명을 입력해주세요.",
         "",
         "{regions}",
     ].join("\n"),
@@ -40,7 +47,7 @@ module.exports = {
     "period.askEnd": "시작일은 {startDate}로 확인했습니다. 언제까지 여행하시나요?",
     "period.askOneDay": "당일치기 여행은 어느 날짜에 가시나요? 예: 내일, 9월 12일",
     "period.example": "예: 내일 하루, 9월 12일부터 14일까지",
-    "travel.askRegion": "안녕하세요! 어디로 여행을 가시나요?",
+    "travel.askRegion": "안녕하세요! 경기북부 어디로 여행을 가시나요?",
     "travel.regionConfirmed": "{region} 여행으로 확인했습니다. {question}",
     "travel.destinationConfirmed": "{destination} 여행으로 확인했습니다.{visit}{theme}{companion} {question}",
     "travel.visitAdded": " 방문 목록에도 추가했습니다.",
@@ -59,7 +66,7 @@ module.exports = {
     "companion.ask": "누구와 함께 여행하시나요?\n(혼자, 연인, 친구, 가족, 부모님, 아이동반)",
 
     // 정정
-    "correction.region": "알겠습니다. 여행 지역을 다시 알려주세요.",
+    "correction.region": "알겠습니다. 경기북부 여행 지역을 다시 알려주세요.",
     "correction.period": "{regionKept}여행 기간을 다시 알려주세요.",
     "correction.regionKept": "{region} 여행 지역은 유지할게요. ",
     "correction.accommodation": "알겠습니다. 예약하신 숙소명이나 주소를 다시 알려주세요.",
@@ -145,6 +152,7 @@ module.exports = {
     "departure.ask": "동선 추천을 위해 출발지를 입력해주세요.",
     "routeOnly.askAttractions": "방문할 관광지를 /관광지명으로 검색해 선택해주세요.",
     "selection.askAgain": "추천 목록에서 마음에 드는 관광지를 선택해주세요.",
+    "selection.chooseOrMore": "추천 목록에서 관광지를 선택하거나, 마음에 드는 곳이 없다면 ‘다른 곳 추천해줘’라고 말씀해주세요.",
 
     // 동행자 확인
     "companion.confirmed": "동행자 유형은 '{companion}'{companion|으로/로} 확인했습니다.",

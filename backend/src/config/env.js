@@ -7,6 +7,7 @@ module.exports = {
         host: process.env.OLLAMA_HOST,
         port: process.env.OLLAMA_PORT,
         model: process.env.OLLAMA_MODEL,
+        storyTimeoutMs: Number(process.env.STORY_LLM_TIMEOUT_MS) || 5000,
     },
 
     weather: {

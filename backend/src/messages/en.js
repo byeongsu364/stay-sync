@@ -11,20 +11,27 @@
 module.exports = {
     // Service type
     "serviceType.prompt": [
-        "Where would you like to travel?",
+        "Enter a Northern Gyeonggi destination or attraction you would like to visit.",
+        "For example: Gapyeong, Jaraseom, or a family trip to Paju",
+        "Available areas: Goyang, Paju, Uijeongbu, Yangju, Dongducheon, Pocheon, Namyangju, Guri, Gapyeong, Yeoncheon",
         "",
-        "If you have already booked a place to stay, or only want a route, pick one below.",
+        "Only choose an option below if you have already decided on your stay or attractions.",
     ].join("\n"),
-    "serviceType.option.booked": "I already booked my stay",
-    "serviceType.option.routeOnly": "I only want a route",
-    "serviceType.invalid": "Please choose 1, 2 or 3.\n\n{prompt}",
+    "serviceType.option.booked": "Stay already booked",
+    "serviceType.option.routeOnly": "Attractions chosen · Route only",
+    "serviceType.invalid": "Enter a destination, or choose an option below if it applies.\n\n{prompt}",
 
     // Region and attractions
-    "region.askForAccommodation": "Which region would you like a place to stay in?",
-    "region.askForAttraction": "Tell me a region you want to visit, or an attraction you have in mind.",
-    "region.askAgain": "I could not find that region or an attraction there. Please tell me a region or an attraction name again.",
+    "region.askForAccommodation": "Which Northern Gyeonggi area would you like a place to stay in?",
+    "region.askForAttraction": "Tell me a Northern Gyeonggi area you want to visit, or an attraction you have in mind.",
+    "region.askAgain": "Tell me a region you want to visit in Northern Gyeonggi, or an attraction you have in mind. I could not find the previous entry.",
     "region.notSupported": [
-        "I could not find a supported destination in that sentence. Please include one of the regions below, or an attraction we cover. For example: I want to go to Jaraseom.",
+        "Stay Sync only supports the ten Northern Gyeonggi areas below. Enter one of them, or an attraction we cover. For example: I want to go to Jaraseom.",
+        "",
+        "{regions}",
+    ].join("\n"),
+    "region.chooseNorthern": [
+        "Which Northern Gyeonggi area would you like to visit? Choose below or enter an attraction name.",
         "",
         "{regions}",
     ].join("\n"),
@@ -40,7 +47,7 @@ module.exports = {
     "period.askEnd": "I have {startDate} as your start date. When does your trip end?",
     "period.askOneDay": "Which day is your day trip? For example: tomorrow, September 12",
     "period.example": "For example: tomorrow for a day, September 12 to 14",
-    "travel.askRegion": "Hello! Where are you travelling to?",
+    "travel.askRegion": "Hello! Where in Northern Gyeonggi are you travelling to?",
     "travel.regionConfirmed": "{region} it is. {question}",
     "travel.destinationConfirmed": "{destination} it is.{visit}{theme}{companion} {question}",
     "travel.visitAdded": " I added it to your visit list.",
@@ -59,7 +66,7 @@ module.exports = {
     "companion.ask": "Who are you travelling with?\n(alone, partner, friends, family, parents, with kids)",
 
     // Corrections
-    "correction.region": "Sure. Which region would you like instead?",
+    "correction.region": "Sure. Which Northern Gyeonggi area would you like instead?",
     "correction.period": "{regionKept}What dates are you travelling?",
     "correction.regionKept": "I will keep {region} as the region. ",
     "correction.accommodation": "Sure. Please tell me the name or address of your stay again.",
@@ -145,6 +152,7 @@ module.exports = {
     "departure.ask": "Where will you start from? I need it to plan the route.",
     "routeOnly.askAttractions": "Search attractions with /name and pick the ones you want to visit.",
     "selection.askAgain": "Please pick the attractions you like from the list.",
+    "selection.chooseOrMore": "Pick an attraction from the list, or say ‘show me other places’ if none appeal to you.",
 
     // Companion confirmation
     "companion.confirmed": "Travelling with: {companion}.",

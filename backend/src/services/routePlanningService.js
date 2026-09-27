@@ -79,7 +79,8 @@ async function planRouteOnlyByDays({ selectedPlaces = [], travelDays, origin = n
     const dailyRoutes = [];
 
     for (let index = 0; index < schedules.length; index += 1) {
-        const places = schedules[index].places;
+        const schedule = schedules[index];
+        const places = schedule.places;
         const dayOrigin = origin || places[0];
         const destinations = origin ? places : places.slice(1);
         const returnToOrigin = Boolean(origin) && index < schedules.length - 1;

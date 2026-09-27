@@ -366,6 +366,64 @@ async function runChat({
         };
     }
 
+    async function showNextRecommendations(currentFacts) {
+        const nextRound = (currentFacts.recommendation_round || 1) + 1;
+        const recommendationResult = await recommendWithSituationContext(currentFacts, nextRound);
+        const recommendationFacts = {
+            ...currentFacts,
+            related_places: recommendationResult.recommendations,
+            recommended_history: recommendationResult.recommendedHistory,
+            recommendation_round: nextRound,
+            weather_forecasts: recommendationResult.weatherContext.forecasts,
+            weather_filter: recommendationResult.weatherFilter,
+            air_quality: recommendationResult.airQualityContext,
+        };
+
+        if (recommendationResult.exhausted) {
+            // 하나라도 선택한 상태라면 기존처럼 추천을 마치고 동선을 만든다.
+            if ((recommendationFacts.selected_places || []).length > 0) {
+                return await finalizeRoute(recommendationFacts);
+            }
+
+            // 선택한 곳이 전혀 없으면 빈 동선을 만들지 않는다. 사용자가 여행 조건을
+            // 바꾸거나 새 여행을 시작할 수 있도록 현재 단계에 머문다.
+            await sessionService.saveConversationState({
+                sessionId,
+                facts: recommendationFacts,
+                currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
+                routeNumber: ROUTE_NUMBER.RECOMMENDATION,
+                lastQuestionField: "selected_places",
+            });
+            return {
+                reply: recommendationResult.reply,
+                currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
+                facts: recommendationFacts,
+                recommendations: [],
+                hasMore: false,
+                exhausted: true,
+            };
+        }
+
+        await sessionService.saveConversationState({
+            sessionId,
+            facts: recommendationFacts,
+            currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
+            routeNumber: ROUTE_NUMBER.RECOMMENDATION,
+            lastQuestionField: null,
+        });
+
+        return {
+            reply: recommendationResult.reply,
+            currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
+            facts: recommendationFacts,
+            recommendations: recommendationResult.recommendations,
+            hasMore: recommendationResult.hasMore,
+            exhausted: false,
+            situationSummary: recommendationResult.situationSummary,
+            situationFilterApplied: Boolean(recommendationResult.weatherFilter),
+        };
+    }
+
     async function finalizeRoute(routeFacts) {
         debug("FINAL_ROUTE_START", `places=${routeFacts.selected_places?.length || 0}`);
         const routeResult = await planDailyRoutes({
@@ -639,8 +697,15 @@ async function runChat({
             const rolledBack = await rollbackToPreviousSection(facts, session.currentStep);
             if (rolledBack) return rolledBack;
 
+            // 추천 목록에 원하는 장소가 없다는 말은 잘못된 선택 입력이 아니라
+            // 다음 추천 페이지 요청이다. 관광지를 먼저 고르도록 강제하지 않는다.
+            const recommendationAnswer = await classifyMoreRecommendationAnswer(message);
+            if (recommendationAnswer === "yes") {
+                return await showNextRecommendations(facts);
+            }
+
             return {
-                reply: selectionResult.reply,
+                reply: `${selectionResult.reply}\n\n${t("selection.chooseOrMore", {}, facts.language)}`,
                 currentStep: CURRENT_STEP.RECOMMENDATION_SHOWN,
                 facts,
             };
@@ -729,49 +794,7 @@ async function runChat({
             return await finalizeRoute(facts);
         }
 
-        const nextRound = (facts.recommendation_round || 1) + 1;
-        const recommendationResult = await recommendWithSituationContext(facts, nextRound);
-        const recommendationFacts = {
-            ...facts,
-            related_places: recommendationResult.recommendations,
-            recommended_history: recommendationResult.recommendedHistory,
-            recommendation_round: nextRound,
-            weather_forecasts: recommendationResult.weatherContext.forecasts,
-            weather_filter: recommendationResult.weatherFilter,
-            air_quality: recommendationResult.airQualityContext,
-        };
-        const nextStep = recommendationResult.exhausted
-            ? CURRENT_STEP.READY_FOR_ROUTE_PLANNING
-            : CURRENT_STEP.RECOMMENDATION_SHOWN;
-        const nextRoute = recommendationResult.exhausted
-            ? ROUTE_NUMBER.ROUTE_PLANNING
-            : ROUTE_NUMBER.RECOMMENDATION;
-        const reply = recommendationResult.exhausted
-            ? t("selection.readyForRoute", { reply: recommendationResult.reply }, facts.language)
-            : recommendationResult.reply;
-
-        if (recommendationResult.exhausted) {
-            return await finalizeRoute(recommendationFacts);
-        }
-
-        await sessionService.saveConversationState({
-            sessionId,
-            facts: recommendationFacts,
-            currentStep: nextStep,
-            routeNumber: nextRoute,
-            lastQuestionField: null,
-        });
-
-        return {
-            reply,
-            currentStep: nextStep,
-            facts: recommendationFacts,
-            recommendations: recommendationResult.recommendations,
-            hasMore: recommendationResult.hasMore,
-            exhausted: recommendationResult.exhausted,
-            situationSummary: recommendationResult.situationSummary,
-            situationFilterApplied: Boolean(recommendationResult.weatherFilter),
-        };
+        return await showNextRecommendations(facts);
     }
 
     /**

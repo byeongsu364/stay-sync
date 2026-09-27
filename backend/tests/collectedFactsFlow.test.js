@@ -241,6 +241,24 @@ test("initial destination survives additional selections and appears in the fina
     assert.equal(result.facts.final_selected_places.length, 2);
 });
 
+for (const request of ["추가로 추천해줘", "다른 곳 보여줘", "마음에 드는 곳이 없어"]) {
+    test(`more recommendations do not require a selection first: ${request}`, async () => {
+        const chat = startConversation();
+        await chat.send("가족들이랑 자라섬으로 내일 하루 갈 거야");
+        await chat.send(location.name, location);
+        assert.equal(chat.step(), "RECOMMENDATION_SHOWN");
+        assert.equal(calls.length, 1);
+
+        const result = await chat.send(request);
+
+        assert.equal(result.currentStep, "RECOMMENDATION_SHOWN");
+        assert.equal(result.recommendations.length, 1);
+        assert.equal(calls.length, 2);
+        assert.equal(calls[1].recommendationRound, 2);
+        assert.ok(calls[1].recommendedHistory.includes(2));
+    });
+}
+
 test("undoing a recommendation selection preserves the initial destination", async () => {
     const chat = startConversation();
     await chat.send("가족들이랑 자라섬으로 내일 하루 갈 거야");

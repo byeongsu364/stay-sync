@@ -31,7 +31,7 @@ function buildStepQuestion(currentStep, facts = {}) {
         [CURRENT_STEP.ASK_COMPANION_TYPE]: () => t("companion.ask", {}, language),
         [CURRENT_STEP.ASK_ROUTE_DAYS]: () => t("routeOnly.askDays", {}, language),
         [CURRENT_STEP.ASK_ROUTE_ATTRACTIONS]: () => t("routeOnly.askAttractions", {}, language),
-        [CURRENT_STEP.RECOMMENDATION_SHOWN]: () => t("selection.askAgain", {}, language),
+        [CURRENT_STEP.RECOMMENDATION_SHOWN]: () => t("selection.chooseOrMore", {}, language),
         [CURRENT_STEP.ASK_MORE_RECOMMENDATION]: () => t("selection.askMoreUnclear", {}, language),
     };
 
