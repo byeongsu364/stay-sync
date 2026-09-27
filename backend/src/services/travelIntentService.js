@@ -182,6 +182,46 @@ function parseDuration(userMessage) {
     return parseEnglishDuration(original);
 }
 
+function findRelativeDates(text) {
+    const value = String(text || "");
+    const found = [];
+
+    for (const match of value.matchAll(/오늘|내일|모레/g)) {
+        found.push({
+            index: match.index,
+            length: match[0].length,
+            offset: match[0] === "오늘" ? 0 : match[0] === "내일" ? 1 : 2,
+        });
+    }
+
+    for (const match of value.matchAll(/\b(day\s+after\s+tomorrow|tomorrow|today)\b/gi)) {
+        const word = match[0].toLowerCase().replace(/\s+/g, " ");
+        found.push({
+            index: match.index,
+            length: match[0].length,
+            offset: word === "today" ? 0 : word === "tomorrow" ? 1 : 2,
+        });
+    }
+
+    return found.sort((left, right) => left.index - right.index);
+}
+
+function hasUntilMarker(text) {
+    return /까지|\b(?:until|through)\b/i.test(text);
+}
+
+function hasFromMarker(text) {
+    return /부터|\b(?:from|starting)\b/i.test(text);
+}
+
+function partialPeriod({ startDate = null, endDate = null }) {
+    return {
+        period: null,
+        start_date: startDate ? formatDate(startDate) : null,
+        end_date: endDate ? formatDate(endDate) : null,
+    };
+}
+
 function parseSimplePeriod(userMessage, now = new Date()) {
     const original = String(userMessage || "");
     const text = original.replace(/\s/g, "");
@@ -196,23 +236,52 @@ function parseSimplePeriod(userMessage, now = new Date()) {
         const { holiday, ...period } = holidayPeriod;
         return period;
     }
-    let offset = null;
-    if (text.includes("모레")) offset = 2;
-    else if (text.includes("내일")) offset = 1;
-    else if (text.includes("오늘")) offset = 0;
-    else if (/\bday\s+after\s+tomorrow\b/i.test(original)) offset = 2;
-    else if (/\btomorrow\b/i.test(original)) offset = 1;
-    else if (/\btoday\b/i.test(original)) offset = 0;
+    const relativeDates = findRelativeDates(original);
+    if (relativeDates.length === 0) {
+        const explicitPeriod = parseExplicitPeriod(userMessage, now);
+        if (!explicitPeriod) return null;
 
-    if (offset === null) return parseExplicitPeriod(userMessage, now);
+        // '~까지'는 종료일만, '~부터'는 시작일만 답한 것이다.
+        const explicitDates = findExplicitDates(original);
+        const duration = parseDuration(original);
+        if (explicitDates.length === 1 && hasUntilMarker(original) && !hasFromMarker(original)) {
+            return partialPeriod({ endDate: parseDate(explicitPeriod.end_date) });
+        }
+        if (explicitDates.length === 1 && hasFromMarker(original) && !hasUntilMarker(original) && !duration) {
+            return partialPeriod({ startDate: parseDate(explicitPeriod.start_date) });
+        }
+        return explicitPeriod;
+    }
 
-    const startDate = addDays(now, offset);
+    const firstRelative = relativeDates[0];
+    const firstDate = addDays(now, firstRelative.offset);
+    if (relativeDates.length >= 2) {
+        const lastDate = addDays(now, relativeDates.at(-1).offset);
+        const start = formatDate(firstDate);
+        const end = formatDate(lastDate);
+        return {
+            period: start === end ? start : `${start} ~ ${end}`,
+            start_date: start,
+            end_date: end,
+        };
+    }
+
+    const aroundDate = `${original.slice(0, firstRelative.index)} ${original.slice(firstRelative.index + firstRelative.length)}`;
+    const duration = parseDuration(userMessage);
+    if (hasUntilMarker(aroundDate) && !hasFromMarker(aroundDate)) {
+        return partialPeriod({ endDate: firstDate });
+    }
+    if (hasFromMarker(aroundDate) && !hasUntilMarker(aroundDate) && !duration) {
+        return partialPeriod({ startDate: firstDate });
+    }
+
+    const startDate = firstDate;
     // '내일 3일'처럼 '동안' 없이 일수만 말하는 경우도 받는다.
     const bareDayMatch = text.match(/(\d+)일(?!차)/);
-    const duration = parseDuration(userMessage)
+    const resolvedDuration = duration
         || (bareDayMatch ? Number.parseInt(bareDayMatch[1], 10) : null)
         || 1;
-    const endDate = addDays(startDate, Math.max(1, duration) - 1);
+    const endDate = addDays(startDate, Math.max(1, resolvedDuration) - 1);
     const start = formatDate(startDate);
     const end = formatDate(endDate);
 
@@ -266,13 +335,38 @@ function normalizePastDates(facts = {}, now = new Date()) {
  * 기존 facts와 새 facts 병합
  */
 function mergeTravelFacts(oldFacts = {}, newFacts = {}) {
+    let startDate = newFacts.start_date ?? oldFacts.start_date ?? null;
+    let endDate = newFacts.end_date ?? oldFacts.end_date ?? null;
+    const newStart = parseDate(newFacts.start_date);
+    const newEnd = parseDate(newFacts.end_date);
+    const newValueIsOneDate = newStart && newEnd
+        && formatDate(newStart) === formatDate(newEnd);
+
+    // 이미 한쪽 날짜만 물어본 상태라면 '오늘', '9월 22일' 같은 단일 날짜는
+    // 새 당일 일정이 아니라 비어 있는 쪽에 대한 답변이다.
+    if (!oldFacts.start_date && oldFacts.end_date && newValueIsOneDate) {
+        startDate = newFacts.start_date;
+        endDate = oldFacts.end_date;
+    } else if (oldFacts.start_date && !oldFacts.end_date && newValueIsOneDate) {
+        startDate = oldFacts.start_date;
+        endDate = newFacts.end_date;
+    }
+
+    const parsedStart = parseDate(startDate);
+    const parsedEnd = parseDate(endDate);
+    const completePeriod = parsedStart && parsedEnd && startOfDay(parsedEnd) >= startOfDay(parsedStart)
+        ? formatDate(parsedStart) === formatDate(parsedEnd)
+            ? formatDate(parsedStart)
+            : `${formatDate(parsedStart)} ~ ${formatDate(parsedEnd)}`
+        : null;
+
     return {
         ...oldFacts,
 
         region: newFacts.region ?? oldFacts.region ?? null,
-        period: newFacts.period ?? oldFacts.period ?? null,
-        start_date: newFacts.start_date ?? oldFacts.start_date ?? null,
-        end_date: newFacts.end_date ?? oldFacts.end_date ?? null,
+        period: completePeriod ?? newFacts.period ?? oldFacts.period ?? null,
+        start_date: startDate,
+        end_date: endDate,
     };
 }
 
@@ -310,6 +404,12 @@ function captureUndatedTripType(userMessage, facts) {
 
 function buildPeriodQuestion(facts) {
     const language = facts.language || "ko";
+    if (!facts.start_date && facts.end_date) {
+        return t("period.askStart", { endDate: facts.end_date }, language);
+    }
+    if (facts.start_date && !facts.end_date) {
+        return t("period.askEnd", { startDate: facts.start_date }, language);
+    }
     return facts.trip_type === "당일치기"
         ? t("period.askOneDay", {}, language)
         : t("period.askRange", {}, language);

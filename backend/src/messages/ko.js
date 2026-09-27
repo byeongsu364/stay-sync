@@ -36,6 +36,8 @@ module.exports = {
 
     // 여행 기간
     "period.askRange": "언제부터 언제까지 여행하시나요?",
+    "period.askStart": "종료일은 {endDate}로 확인했습니다. 언제부터 여행하시나요?",
+    "period.askEnd": "시작일은 {startDate}로 확인했습니다. 언제까지 여행하시나요?",
     "period.askOneDay": "당일치기 여행은 어느 날짜에 가시나요? 예: 내일, 9월 12일",
     "period.example": "예: 내일 하루, 9월 12일부터 14일까지",
     "travel.askRegion": "안녕하세요! 어디로 여행을 가시나요?",

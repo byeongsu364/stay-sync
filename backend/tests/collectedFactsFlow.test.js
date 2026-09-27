@@ -119,6 +119,25 @@ test("date provided before a destination survives and is not requested again", a
     assert.equal(result.facts.companion_type, "가족");
 });
 
+test("an end-only answer asks for the missing start date instead of becoming a day trip", async () => {
+    const chat = startConversation();
+    assert.equal((await chat.send("자라섬")).currentStep, "ASK_PERIOD");
+
+    const partial = await chat.send("모레까지");
+    assert.equal(partial.currentStep, "ASK_PERIOD");
+    assert.equal(partial.facts.start_date, null);
+    assert.ok(partial.facts.end_date);
+    assert.notEqual(partial.facts.trip_type, "당일치기");
+    assert.match(partial.reply, /언제부터/);
+
+    const completed = await chat.send("오늘");
+    assert.ok(completed.facts.start_date);
+    assert.ok(completed.facts.end_date);
+    assert.notEqual(completed.facts.start_date, completed.facts.end_date);
+    assert.equal(completed.facts.trip_type, "숙박");
+    assert.notEqual(completed.currentStep, "ASK_START_LOCATION");
+});
+
 for (const booked of [false, true]) {
     for (const overnight of [false, true]) {
         test(`all supplied facts survive until recommendation: booked=${booked}, overnight=${overnight}`, async () => {

@@ -118,7 +118,12 @@ async function runChat({
         CURRENT_STEP.ASK_ATTRACTION_REGION, CURRENT_STEP.ASK_PERIOD].includes(session.currentStep)) {
         let capturedFacts = captureCompanionFacts(message, facts);
         capturedFacts = captureUndatedTripType(message, capturedFacts);
-        const period = parseSimplePeriod(message);
+        // 기간을 직접 묻는 단계에서는 아래 extractTravelIntent가 날짜를 해석한다.
+        // 여기서 먼저 합치면 '모레까지' 다음의 '오늘'을 두 번 처리해
+        // 기존 종료일을 오늘로 덮어쓸 수 있다.
+        const period = session.currentStep === CURRENT_STEP.ASK_PERIOD
+            ? null
+            : parseSimplePeriod(message);
         if (period) {
             capturedFacts = applyTripType(mergeTravelFacts(capturedFacts, period));
         }

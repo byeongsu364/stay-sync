@@ -36,6 +36,8 @@ module.exports = {
 
     // Travel period
     "period.askRange": "What dates are you travelling?",
+    "period.askStart": "I have {endDate} as your end date. When does your trip start?",
+    "period.askEnd": "I have {startDate} as your start date. When does your trip end?",
     "period.askOneDay": "Which day is your day trip? For example: tomorrow, September 12",
     "period.example": "For example: tomorrow for a day, September 12 to 14",
     "travel.askRegion": "Hello! Where are you travelling to?",

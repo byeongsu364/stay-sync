@@ -8,6 +8,9 @@ const {
     normalizePastDates,
     findRelativeYearOffset,
     findSpokenYear,
+    mergeTravelFacts,
+    applyTripType,
+    decideTravelIntentStep,
 } = require("../src/services/travelIntentService");
 const { shiftPastDateToNextYear, parseDate, formatDate } = require("../src/utils/dateUtils");
 
@@ -94,6 +97,40 @@ test("relative dates still work and unrelated text is not a date", () => {
     for (const input of ["다음 주쯤", "경기북부에서 유명한 관광지 5개 추천해줘", "가평"]) {
         assert.equal(parseSimplePeriod(input, TODAY), null, input);
     }
+});
+
+test("an end date on its own is kept partial until the start date is provided", () => {
+    const endOnly = parseSimplePeriod("모레까지", TODAY);
+    assert.deepEqual(endOnly, {
+        period: null,
+        start_date: null,
+        end_date: "2026-09-14",
+    });
+
+    const waiting = decideTravelIntentStep(applyTripType({ region: "파주", ...endOnly }));
+    assert.equal(waiting.current_step, "ASK_PERIOD");
+    assert.match(waiting.reply, /언제부터/);
+
+    const completed = applyTripType(mergeTravelFacts(endOnly, parseSimplePeriod("오늘", TODAY)));
+    assert.equal(completed.period, "2026-09-12 ~ 2026-09-14");
+    assert.equal(completed.trip_type, "숙박");
+});
+
+test("relative and explicit start/end markers preserve their direction", () => {
+    assert.equal(
+        parseSimplePeriod("내일부터 모레까지", TODAY).period,
+        "2026-09-13 ~ 2026-09-14",
+    );
+    assert.deepEqual(parseSimplePeriod("9월 20일까지", TODAY), {
+        period: null,
+        start_date: null,
+        end_date: "2026-09-20",
+    });
+    assert.deepEqual(parseSimplePeriod("9월 20일부터", TODAY), {
+        period: null,
+        start_date: "2026-09-20",
+        end_date: null,
+    });
 });
 
 test("an impossible date is not accepted", () => {
